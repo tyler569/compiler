@@ -11,6 +11,7 @@ enum node_type {
     NODE_TYPE,
     NODE_DECLARATION,
     NODE_FUNCTION,
+    NODE_ERROR,
 };
 
 struct node {

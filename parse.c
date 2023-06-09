@@ -34,15 +34,12 @@ static bool more_data(struct context *);
 static struct node *new(struct context *);
 static int id(struct context *, struct node *);
 static void report_error(struct context *, const char *message);
+static int report_error_node(struct context *, const char *message);
 static void pass(struct context *);
 static void eat(struct context *, int token_type);
 static struct token *pull(struct context *, int token_type);
 
-static void parse_external_declaration(struct context *context);
-
-static int parse_number(struct context *);
-static int parse_mul(struct context *);
-static int parse_add(struct context *);
+static int parse_or(struct context *);
 
 struct node *parse(struct token *tokens, const char *source) {
     struct context *context = &(struct context){
@@ -59,7 +56,7 @@ struct node *parse(struct token *tokens, const char *source) {
 
     while (more_data(context) && context->errors == 0) {
         // parse_external_declaration(context);
-        root->root.children[n++] = parse_add(context);
+        root->root.children[n++] = parse_or(context);
     }
 
     return root;
@@ -123,26 +120,15 @@ static int id(struct context *context, struct node *node) {
 }
 
 static void report_error(struct context *context, const char *message) {
-    (void)context;
     fprintf(stderr, "ast error: %s\n", message);
     context->errors += 1;
 }
 
-static void parse_external_declaration(struct context *context) {
-    struct token *token = TOKEN(context);
-    switch (token->type) {
-    case TOKEN_IDENT: {
-        if (!is_typename(context, token, 1)) {
-            report_error(context, "need type for external definition");
-            return;
-        }
-
-        struct node *node = new(context);
-        node->type = NODE_DECLARATION;
-    }
-    default:
-        report_error(context, "expected identifier, found not that");
-    }
+static int report_error_node(struct context *context, const char *message) {
+    struct node *node = new(context);
+    node->type = NODE_ERROR;
+    node->token = TOKEN(context);
+    return id(context, node);
 }
 
 static void pass(struct context *context) {
@@ -177,22 +163,23 @@ static void print_ast_recursive(struct node *root, struct node *node, const char
 
     switch (node->type) {
     case NODE_ROOT:
-        fputs("root:\n", stdout);
+        printf("root:\n");
         for (int i = 0; i < 10 && node->root.children[i]; i++) {
             print_ast_recursive(root, GET(node->root.children[i]), source, level + 1);
         }
         break;
     case NODE_INT_LITERAL:
-        fputs("int: ", stdout);
-        printf("%.*s\n", token->len, &source[token->index]);
+        printf("int: %.*s\n", token->len, &source[token->index]);
         break;
     case NODE_BINOP:
-        fputs("binop: ", stdout);
-        printf("%.*s\n", token->len, &source[token->index]);
+        printf("binop: %.*s\n", token->len, &source[token->index]);
         struct node *left = GET(node->binop.left);
         struct node *right = GET(node->binop.right);
         print_ast_recursive(root, left, source, level + 1);
         print_ast_recursive(root, right, source, level + 1);
+        break;
+    case NODE_ERROR:
+        printf("error: %.*s\n", token->len, &source[token->index]);
         break;
     default:
         printf("unknown\n");
@@ -205,10 +192,11 @@ void print_ast(struct node *root, const char *source) {
 }
 
 static int parse_number(struct context *context) {
-    struct token *token = pull(context, TOKEN_INT);
-    if (!token) {
-        report_error(context, "expected number, found nothing");
-        return 0;
+    struct token *token = TOKEN(context);
+    pass(context);
+
+    if (token->type != TOKEN_INT) {
+        return report_error_node(context, "expected number, didn't find it");
     }
 
     struct node *node = new(context);
@@ -218,42 +206,72 @@ static int parse_number(struct context *context) {
     return id(context, node);
 }
 
-static int parse_mul(struct context *context) {
-    int result = parse_number(context);
-
-    struct token *token = TOKEN(context);
-    while (token->type == '*' || token->type == '/') {
-        pass(context);
-
-        struct node *node = new(context);
-        node->type = NODE_BINOP;
-        node->token = token;
-        node->binop.left = result;
-        node->binop.right = parse_number(context);
-
-        result = id(context, node);
-        token = TOKEN(context);
-    }
-
-    return result;
+#define PARSE_BINOP(name, upstream, tt_expr) \
+static int name(struct context *context) { \
+    int result = upstream(context); \
+    struct token *token = TOKEN(context); \
+    while (tt_expr) { \
+        pass(context); \
+        struct node *node = new(context); \
+        node->type = NODE_BINOP; \
+        node->token = token; \
+        node->binop.left = result; \
+        node->binop.right = upstream(context); \
+        result = id(context, node); \
+        token = TOKEN(context); \
+    } \
+    return result; \
 }
 
-static int parse_add(struct context *context) {
-    int result = parse_mul(context);
+PARSE_BINOP(parse_mul, parse_number, token->type == '*' || token->type == '/' || token->type == '%')
+PARSE_BINOP(parse_add, parse_mul, token->type == '+' || token->type == '-')
+PARSE_BINOP(parse_shift, parse_add, token->type == TOKEN_SHIFT_LEFT || token->type == TOKEN_SHIFT_RIGHT)
+PARSE_BINOP(parse_rel, parse_shift, token->type == '<' || token->type == '>' || token->type == TOKEN_GREATER_EQUAL || token->type == TOKEN_LESS_EQUAL)
+PARSE_BINOP(parse_eq, parse_rel, token->type == TOKEN_EQUAL_EQUAL || token->type == TOKEN_NOT_EQUAL)
+PARSE_BINOP(parse_bitand, parse_eq, token->type == '&')
+PARSE_BINOP(parse_bitxor, parse_bitand, token->type == '^')
+PARSE_BINOP(parse_bitor, parse_bitxor, token->type == '|')
+PARSE_BINOP(parse_and, parse_bitor, token->type == TOKEN_AND)
+PARSE_BINOP(parse_or, parse_and, token->type == TOKEN_OR)
 
-    struct token *token = TOKEN(context);
-    while (token->type == '+' || token->type == '-') {
-        pass(context);
 
-        struct node *node = new(context);
-        node->type = NODE_BINOP;
-        node->token = token;
-        node->binop.left = result;
-        node->binop.right = parse_mul(context);
 
-        result = id(context, node);
-        token = TOKEN(context);
-    }
-
-    return result;
-}
+// static int parse_mul(struct context *context) {
+//     int result = parse_number(context);
+//
+//     struct token *token = TOKEN(context);
+//     while (token->type == '*' || token->type == '/') {
+//         pass(context);
+//
+//         struct node *node = new(context);
+//         node->type = NODE_BINOP;
+//         node->token = token;
+//         node->binop.left = result;
+//         node->binop.right = parse_number(context);
+//
+//         result = id(context, node);
+//         token = TOKEN(context);
+//     }
+//
+//     return result;
+// }
+//
+// static int parse_add(struct context *context) {
+//     int result = parse_mul(context);
+//
+//     struct token *token = TOKEN(context);
+//     while (token->type == '+' || token->type == '-') {
+//         pass(context);
+//
+//         struct node *node = new(context);
+//         node->type = NODE_BINOP;
+//         node->token = token;
+//         node->binop.left = result;
+//         node->binop.right = parse_mul(context);
+//
+//         result = id(context, node);
+//         token = TOKEN(context);
+//     }
+//
+//     return result;
+// }
