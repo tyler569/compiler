@@ -4,14 +4,17 @@
 
 enum node_type {
     NODE_ROOT,
-    NODE_BINOP,
+    NODE_BINARY_OP,
+    NODE_UNARY_OP,
+    NODE_POSTFIX_OP,
+    NODE_IDENT,
     NODE_INT_LITERAL,
     NODE_FLOAT_LITERAL,
     NODE_STRING_LITERAL,
-    NODE_TYPE,
-    NODE_DECLARATION,
-    NODE_FUNCTION,
     NODE_ERROR,
+    NODE_MEMBER,
+    NODE_SUBSCRIPT,
+    NODE_TERNARY,
 };
 
 struct node {
@@ -25,6 +28,22 @@ struct node {
             int left;
             int right;
         } binop;
+        struct {
+            int inner;
+        } unary_op;
+        struct {
+            int inner;
+            struct token *ident;
+        } member;
+        struct {
+            int inner;
+            int subscript;
+        } subscript;
+        struct {
+            int condition;
+            int branch_true;
+            int branch_false;
+        } ternary;
     };
 };
 

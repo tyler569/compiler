@@ -6,7 +6,7 @@
 #include "parse.h"
 
 // const char *source = "int x = 10;\nint foo() { return 10 << 3; }";
-const char *source = "1+2 >> 4 | 5 && 10 == 9";
+const char *source = "a, b + 2 & c++, condition ? true : false";
 
 void print_line(const char *source, int position, int line);
 void print_and_highlight(const char *source, struct token *token);
