@@ -15,14 +15,18 @@ enum node_type {
     NODE_MEMBER,
     NODE_SUBSCRIPT,
     NODE_TERNARY,
+    NODE_FUNCTION_CALL,
 };
+
+#define MAX_BLOCK_MEMBERS 10
+#define MAX_FUNCTION_ARGS 9
 
 struct node {
     enum node_type type;
     struct token *token;
     union {
         struct {
-            int children[10];
+            int children[MAX_BLOCK_MEMBERS];
         } root;
         struct {
             int left;
@@ -44,6 +48,10 @@ struct node {
             int branch_true;
             int branch_false;
         } ternary;
+        struct {
+            int inner;
+            int args[MAX_FUNCTION_ARGS];
+        } function_call;
     };
 };
 

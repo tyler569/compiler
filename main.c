@@ -12,7 +12,8 @@ int main() {
     // const char *source = "int x = 10;\nint foo() { return 10 << 3; }";
     // const char *source = "a, b + 2 & c++, condition ? true : false";
     // const char *source = "a = b, c |= d, 1 ? 2 : 3, -10, *a = b++, *a++, (*a)++, (2+2) * 12";
-    const char *source = "'\\\\', '\\'', '\\n', '\\t', -1, 2.2";
+    // const char *source = "'\\\\', '\\'', '\\n', '\\t', -1, 2.2";
+    const char *source = "foo(a, b, c = 1)() && d[*a++]++";
 
     struct token *tokens = tokenize(strlen(source), source, "");
 
