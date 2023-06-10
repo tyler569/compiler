@@ -170,6 +170,10 @@ static void print_ast_recursive(struct node *root, struct node *node, const char
         printf("int: %.*s (%llu)\n", token->len, &source[token->index], token->int_.value);
         break;
     }
+    case NODE_FLOAT_LITERAL: {
+        printf("float: %.*s (%f)\n", token->len, &source[token->index], token->float_.value);
+        break;
+    }
     case NODE_IDENT: {
         printf("ident: %.*s\n", token->len, &source[token->index]);
         break;
@@ -230,6 +234,11 @@ static int parse_primary_expression(struct context *context) {
     switch (TOKEN(context)->type) {
     case TOKEN_INT: {
         struct node *node = new(context, NODE_INT_LITERAL);
+        pass(context);
+        return id(context, node);
+    }
+    case TOKEN_FLOAT: {
+        struct node *node = new(context, NODE_FLOAT_LITERAL);
         pass(context);
         return id(context, node);
     }

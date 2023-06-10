@@ -187,14 +187,21 @@ static void read_number(struct state *state) {
     const char *str = &CHAR(state);
     char *after = nullptr;
 
-    // TODO: digit separators. I'll need to make a custom strtoull
+    // TODO: digit separators. I'll need to make a custom strtoull / strtod
 
     errno = 0;
     token->int_.value = strtoull(str, &after, 0);
+
+    if (*after == '.' || *after == 'e' || *after == 'p') {
+        token->type = TOKEN_FLOAT;
+        token->float_.value = strtod(str, &after);
+    }
+
     if (errno == ERANGE) {
         errno = 0;
-        report_error(state, "integer literal out of range");
+        report_error(state, "number literal out of range");
     }
+
     state->position += (int)(after - str);
 
     end(state, token);
