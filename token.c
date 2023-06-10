@@ -1,8 +1,10 @@
 #include "token.h"
+#include "util.h"
 
 #include <ctype.h>
 #include <stdio.h>
 #include <errno.h>
+#include <string.h>
 
 // This affects the column offsets in tokens, when the compiler finds a tab it
 // adds extra columns to account for the fact that the byte offset and visual offset
@@ -163,11 +165,85 @@ static bool is_ident(char c) {
     return isalnum(c) || c == '_';
 }
 
+static const char *keywords[] = {
+    "alignas",
+    "alignof",
+    "auto",
+    "bool",
+    "break",
+    "case",
+    "char",
+    "const",
+    "constexpr",
+    "continue",
+    "default",
+    "do",
+    "double",
+    "else",
+    "enum",
+    "extern",
+    "false",
+    "float",
+    "for",
+    "goto",
+    "if",
+    "inline",
+    "int",
+    "long",
+    "nullptr",
+    "register",
+    "restrict",
+    "return",
+    "short",
+    "signed",
+    "sizeof",
+    "static",
+    "static_assert",
+    "struct",
+    "switch",
+    "thread_local",
+    "true",
+    "typedef",
+    "typeof",
+    "typeof_unqual",
+    "union",
+    "unsigned",
+    "void",
+    "volatile",
+    "while",
+    "_Atomic",
+    "_BitInt",
+    "_Complex",
+    "_Decimal128",
+    "_Decimal32",
+    "_Decimal64",
+    "_Generic",
+    "_Imaginary",
+    "_Noreturn",
+};
+
+static_assert(ARRAY_LEN(keywords) == TOKEN_LAST_KEYWORD - TOKEN_FIRST_KEYWORD);
+
+// could populate the lengths here on startup if we need to
+size_t keyword_lens[ARRAY_LEN(keywords)];
+
 static void read_ident(struct state *state) {
     struct token *token = new(state, TOKEN_IDENT);
 
+    const char *first = &CHAR(state);
     while (is_ident(CHAR(state))) {
         pass(state);
+    }
+    const char *last = &CHAR(state);
+
+    // TODO: This is probably really slow
+    for (int i = 0; i < ARRAY_LEN(keywords); i += 1) {
+        size_t keyword_len = strlen(keywords[i]);
+        size_t token_len = last - first;
+        size_t len = keyword_len > token_len ? keyword_len : token_len;
+        if (strncmp(keywords[i], first, len) == 0) {
+            token->type = TOKEN_ALIGNAS + i;
+        }
     }
 
     end(state, token);
@@ -354,7 +430,11 @@ static void read_symbol(struct state *state) {
 void print_token_type(struct token *token) {
     putchar('(');
     if (token->type != 0 && token->type < 128) {
+        putchar('\'');
         putchar(token->type);
+        putchar('\'');
+    } else if (token->type >= TOKEN_FIRST_KEYWORD) {
+        fputs(keywords[token->type - TOKEN_FIRST_KEYWORD], stdout);
     } else switch (token->type) {
 #define CASE(tt, str) case (tt): fputs((str), stdout); break;
     CASE(TOKEN_NULL, "null")

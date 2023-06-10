@@ -1,16 +1,14 @@
 #include "parse.h"
 #include "token.h"
+#include "util.h"
 
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
 
-#define ARRAY_LEN(a) (sizeof(a) / sizeof(a[0]))
-
 typedef int node_pos;
 
-#define NODE(context, n) (context->at.nodes[n])
 #define TOKEN(context) (&context->tokens[context->position])
 #define PEEK(context) (&context->tokens[context->position + 1])
 
@@ -335,7 +333,7 @@ static int parse_prefix_expression(struct context *context) {
     if (token->type == TOKEN_PLUS_PLUS || token->type == TOKEN_MINUS_EQUAL ||
         token->type == '+' || token->type == '-' || token->type == '*' ||
         token->type == '&' || token->type == '~' || token->type == '!' ||
-        tokenmatch(context, token, "sizeof") || tokenmatch(context, token, "alignof")) {
+        token->type == TOKEN_SIZEOF || token->type == TOKEN_ALIGNOF) {
 
         struct node *node = new(context, NODE_UNARY_OP);
         pass(context);
@@ -419,3 +417,9 @@ static int parse_assignment_expression(struct context *context) {
 }
 
 PARSE_BINOP(parse_expression, parse_assignment_expression, token->type == ',')
+
+// end expressions
+
+static int parse_type_name(struct context *context) {
+
+}
