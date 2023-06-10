@@ -2,6 +2,7 @@
 
 #include <ctype.h>
 #include <stdio.h>
+#include <errno.h>
 
 // This affects the column offsets in tokens, when the compiler finds a tab it
 // adds extra columns to account for the fact that the byte offset and visual offset
@@ -183,18 +184,18 @@ static bool is_xdigit(char c) {
 static void read_number(struct state *state) {
     struct token *token = new(state, TOKEN_INT);
 
-    char c = CHAR(state);
-    if (c == '0' && PEEK(state) == 'x') {
-        eat(state, '0');
-        eat(state, 'x');
-        while (is_xdigit(CHAR(state))) {
-            pass(state);
-        }
-    } else {
-        while (is_digit(CHAR(state))) {
-            pass(state);
-        }
+    const char *str = &CHAR(state);
+    char *after = nullptr;
+
+    // TODO: digit separators. I'll need to make a custom strtoull
+
+    errno = 0;
+    token->int_.value = strtoull(str, &after, 0);
+    if (errno == ERANGE) {
+        errno = 0;
+        report_error(state, "integer literal out of range");
     }
+    state->position += (int)(after - str);
 
     end(state, token);
 }
@@ -213,16 +214,60 @@ static void read_string(struct state *state) {
 }
 
 static void read_char(struct state *state) {
-    struct token *token = new(state, TOKEN_CHAR);
+    struct token *token = new(state, TOKEN_INT);
+    uint64_t value = 0;
+#define VALUE_PUSH(v) (value <<= 8, value |= (v))
+#define ESCAPE_CASE(l, e) case (l): VALUE_PUSH((e)); break
 
-    state->position += 1;
-    // TODO: escaping 's
-    while (CHAR(state) != '\'') {
+    eat(state, '\'');
+    bool in_escape = false;
+    bool cont = true;
+
+    while (cont) {
+        if (in_escape) {
+            switch (CHAR(state)) {
+            ESCAPE_CASE('\\', '\\');
+            ESCAPE_CASE('\'', '\'');
+            ESCAPE_CASE('?', '\?');
+            ESCAPE_CASE('"', '"');
+            ESCAPE_CASE('a', '\a');
+            ESCAPE_CASE('b', '\b');
+            ESCAPE_CASE('f', '\f');
+            ESCAPE_CASE('n', '\n');
+            ESCAPE_CASE('r', '\r');
+            ESCAPE_CASE('t', '\t');
+            ESCAPE_CASE('v', '\v');
+            case 'x':
+                report_error(state, "hex escape codes not yet implemented");
+                break;
+            default:
+                if (CHAR(state) >= '0' && CHAR(state) < '8')
+                    report_error(state, "octal escape codes not yet implemeted");
+                else
+                    report_error(state, "unknown escape code");
+            }
+            in_escape = false;
+        } else {
+            switch (CHAR(state)) {
+            case '\\':
+                in_escape = true;
+                break;
+            case '\'':
+                cont = false;
+                break;
+            default:
+                VALUE_PUSH(CHAR(state)); break;
+            }
+        }
         pass(state);
     }
-    eat(state, '\'');
 
+    token->int_.value = value;
+
+    // eat(state, '\'');
     end(state, token);
+#undef VALUE_PUSH
+#undef ESCAPE_CASE
 }
 
 static void read_symbol(struct state *state) {
@@ -282,6 +327,13 @@ static void read_symbol(struct state *state) {
             else token->type = TOKEN_AND;
         } else if (pull(state, '=')) token->type = TOKEN_BITAND_EQUAL;
         break;
+    case '.':
+        if (PEEK(state) == '.' && state->source[state->position + 2] == '.') {
+            pass(state);
+            pass(state);
+            token->type = TOKEN_ELLIPSES;
+            break;
+        }
     default:
     }
 
@@ -303,7 +355,6 @@ void print_token_type(struct token *token) {
     CASE(TOKEN_INT, "int")
     CASE(TOKEN_FLOAT, "float")
     CASE(TOKEN_STRING, "string")
-    CASE(TOKEN_CHAR, "char")
     CASE(TOKEN_EOF, "eof")
     CASE(TOKEN_ARROW, "->")
     CASE(TOKEN_EQUAL_EQUAL, "==")
@@ -328,6 +379,7 @@ void print_token_type(struct token *token) {
     CASE(TOKEN_SHIFT_RIGHT_EQUAL, ">>=")
     CASE(TOKEN_SHIFT_LEFT, "<<")
     CASE(TOKEN_SHIFT_LEFT_EQUAL, "<<=")
+    CASE(TOKEN_ELLIPSES, "...")
 #undef CASE
     }
     putchar(')');

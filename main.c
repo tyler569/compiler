@@ -6,7 +6,9 @@
 #include "parse.h"
 
 // const char *source = "int x = 10;\nint foo() { return 10 << 3; }";
-const char *source = "a, b + 2 & c++, condition ? true : false";
+// const char *source = "a, b + 2 & c++, condition ? true : false";
+// const char *source = "a = b, c |= d, 1 ? 2 : 3, -10, *a = b++, *a++, (*a)++, (2+2) * 12";
+const char *source = "'\\\\', '\\'', '\\n', '\\t', -1";
 
 void print_line(const char *source, int position, int line);
 void print_and_highlight(const char *source, struct token *token);
@@ -18,7 +20,6 @@ int main() {
         fputs("token", stdout);
         print_token_type(t);
         printf("@(%i:%i) '%.*s'\n", t->line, t->column, t->len, &source[t->index]);
-
         print_and_highlight(source, t);
     }
 

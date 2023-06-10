@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <assert.h>
 
 #define ARRAY_LEN(a) (sizeof(a) / sizeof(a[0]))
 
@@ -37,9 +38,7 @@ static void report_error(struct context *, const char *message);
 static int report_error_node(struct context *, const char *message);
 static void pass(struct context *);
 static void eat(struct context *, int token_type);
-static struct token *pull(struct context *, int token_type);
 
-static int parse_or(struct context *);
 static int parse_expression(struct context *);
 
 struct node *parse(struct token *tokens, const char *source) {
@@ -139,21 +138,14 @@ static void pass(struct context *context) {
     context->position += 1;
 }
 
+// This isn't very useful right now since it just advances no matter what.
+// It should probably add an error node or something, but I'm not sure that
+// can be genericized.
 static void eat(struct context *context, int token_type) {
     if (TOKEN(context)->type != token_type) {
         report_error(context, "expected eat, found wrong");
     }
     pass(context);
-}
-
-static struct token *pull(struct context *context, int token_type) {
-    struct token *token = TOKEN(context);
-    if (token->type == token_type) {
-        pass(context);
-        return token;
-    } else {
-        return nullptr;
-    }
 }
 
 static void print_space(int level) {
@@ -175,7 +167,7 @@ static void print_ast_recursive(struct node *root, struct node *node, const char
         break;
     }
     case NODE_INT_LITERAL: {
-        printf("int: %.*s\n", token->len, &source[token->index]);
+        printf("int: %.*s (%llu)\n", token->len, &source[token->index], token->int_.value);
         break;
     }
     case NODE_IDENT: {
@@ -371,8 +363,27 @@ static int parse_ternary_expression(struct context *context) {
 }
 
 static int parse_assignment_expression(struct context *context) {
-    return parse_ternary_expression(context);
+    struct context saved = *context;
 
+    int expr = parse_prefix_expression(context);
+    struct token *token = TOKEN(context);
+
+    if (token->type == '=' || token->type == TOKEN_STAR_EQUAL || token->type == TOKEN_DIVIDE_EQUAL ||
+        token->type == TOKEN_MOD_EQUAL || token->type == TOKEN_PLUS_EQUAL || token->type == TOKEN_MINUS_EQUAL ||
+        token->type == TOKEN_SHIFT_LEFT_EQUAL || token->type == TOKEN_SHIFT_RIGHT_EQUAL ||
+        token->type == TOKEN_BITAND_EQUAL || token->type == TOKEN_BITXOR_EQUAL || token->type == TOKEN_BITOR_EQUAL) {
+
+        struct node *node = new(context, NODE_BINARY_OP);
+        pass(context);
+
+        node->binop.left = expr;
+        node->binop.right = parse_assignment_expression(context);
+        return id(context, node);
+    } else {
+        assert(context->ta.nodes == saved.ta.nodes);
+        *context = saved;
+        return parse_ternary_expression(context);
+    }
 }
 
 PARSE_BINOP(parse_expression, parse_assignment_expression, token->type == ',')
