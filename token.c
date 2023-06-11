@@ -386,6 +386,9 @@ static void read_symbol(struct state *state) {
     case '=':
         if (pull(state, '=')) token->type = TOKEN_EQUAL_EQUAL;
         break;
+    case ':':
+        if (pull(state, ':')) token->type = TOKEN_COLON_COLON;
+        break;
     case '>':
         if (pull(state, '>')) {
             if (pull(state, '=')) token->type = TOKEN_SHIFT_RIGHT_EQUAL;
