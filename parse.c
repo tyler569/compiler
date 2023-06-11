@@ -143,6 +143,8 @@ static void print_space(int level) {
     for (int i = 0; i < level; i++) fputs("  ", stdout);
 }
 
+#define RECUR(node) print_ast_recursive(nullptr, tu, (node), level + 1)
+#define RECUR_INFO(info, node) print_ast_recursive((info), tu, (node), level + 1)
 static void print_ast_recursive(const char *info, struct tu *tu, int node_id, int level) {
     if (level > 10) exit(1);
     print_space(level);
@@ -156,7 +158,7 @@ static void print_ast_recursive(const char *info, struct tu *tu, int node_id, in
     case NODE_ROOT: {
         printf("root:\n");
         for (int i = 0; i < MAX_BLOCK_MEMBERS && node->root.children[i]; i++) {
-            print_ast_recursive(nullptr, tu, node->root.children[i], level + 1);
+            RECUR(node->root.children[i]);
         }
         break;
     }
@@ -174,55 +176,46 @@ static void print_ast_recursive(const char *info, struct tu *tu, int node_id, in
     }
     case NODE_BINARY_OP: {
         printf("binop: %.*s\n", token->len, &source[token->index]);
-        int left = node->binop.left;
-        int right = node->binop.right;
-        print_ast_recursive(nullptr, tu, left, level + 1);
-        print_ast_recursive(nullptr, tu, right, level + 1);
+        RECUR(node->binop.left);
+        RECUR(node->binop.right);
         break;
     }
     case NODE_UNARY_OP: {
         printf("unop: %.*s\n", token->len, &source[token->index]);
-        int inner = node->unary_op.inner;
-        print_ast_recursive(nullptr, tu, inner, level + 1);
+        RECUR(node->unary_op.inner);
         break;
     }
     case NODE_POSTFIX_OP: {
         printf("postfix: %.*s\n", token->len, &source[token->index]);
-        int inner = node->unary_op.inner;
-        print_ast_recursive(nullptr, tu, inner, level + 1);
+        RECUR(node->unary_op.inner);
         break;
     }
     case NODE_SUBSCRIPT: {
         printf("subscript:\n");
-        int inner = node->subscript.inner;
-        int subscript = node->subscript.subscript;
-        print_ast_recursive("arr:", tu, inner, level + 1);
-        print_ast_recursive("sub:", tu, subscript, level + 1);
+        RECUR_INFO("arr:", node->subscript.inner);
+        RECUR_INFO("sub:", node->subscript.subscript);
         break;
     }
     case NODE_TERNARY: {
         printf("ternary:\n");
-        int cond = node->ternary.condition;
-        int b_true = node->ternary.branch_true;
-        int b_false = node->ternary.branch_false;
-        print_ast_recursive("cnd:", tu, cond, level + 1);
-        print_ast_recursive("yes:", tu, b_true, level + 1);
-        print_ast_recursive(" no:", tu, b_false, level + 1);
+        RECUR_INFO("cnd:", node->ternary.condition);
+        RECUR_INFO("tru:", node->ternary.branch_true);
+        RECUR_INFO("fls:", node->ternary.branch_false);
         break;
     }
     case NODE_FUNCTION_CALL: {
         printf("funcall:\n");
-        print_ast_recursive("fun:", tu, node->function_call.inner, level + 1);
+        RECUR_INFO("fun:", node->function_call.inner);
         for (int i = 0; i < MAX_FUNCTION_ARGS && node->function_call.args[i] != 0; i += 1) {
-            print_ast_recursive("arg:", tu, node->function_call.args[i], level + 1);
+            RECUR_INFO("arg", node->function_call.args[i]);
         }
         break;
     }
     case NODE_DECLARATION: {
         printf("decl:\n");
-        print_ast_recursive("typ:", tu, node->decl.type, level + 1);
+        RECUR_INFO("typ:", node->decl.type);
         for (int i = 0; i < MAX_DECLARATORS && node->decl.declarators[i] != 0; i += 1) {
-            print_ast_recursive("dcl:", tu, node->decl.declarators[i], level + 1);
+            RECUR_INFO("dcl:", node->decl.declarators[i]);
         }
         break;
     }
@@ -233,39 +226,39 @@ static void print_ast_recursive(const char *info, struct tu *tu, int node_id, in
     case NODE_DECLARATOR: {
         printf("d: %.*s\n", token->len, &source[token->index]);
         if (node->declarator.inner) {
-            print_ast_recursive(nullptr, tu, node->declarator.inner, level + 1);
+            RECUR(node->declarator.inner);
         }
         break;
     }
     case NODE_FUNCTION_DECLARATOR: {
         printf("d.func:\n");
-        print_ast_recursive(nullptr, tu, node->funcall_declarator.inner, level + 1);
+        RECUR(node->funcall_declarator.inner);
         break;
     }
     case NODE_ARRAY_DECLARATOR: {
         printf("d.array:\n");
-        print_ast_recursive("arr:", tu, node->array_declarator.inner, level + 1);
+        RECUR_INFO("arr:", node->array_declarator.inner);
         if (node->array_declarator.subscript)
-            print_ast_recursive("sub:", tu, node->array_declarator.subscript, level + 1);
+            RECUR_INFO("sub:", node->array_declarator.subscript);
         break;
     }
     case NODE_STATIC_ASSERT: {
         printf("static assert:\n");
-        print_ast_recursive("tst:", tu, node->st_assert.expr, level + 1);
+        RECUR_INFO("tst:", node->st_assert.expr);
         if (node->st_assert.message)
-            print_ast_recursive("msg:", tu, node->st_assert.message, level + 1);
+            RECUR_INFO("msg:", node->st_assert.message);
         break;
     }
     case NODE_FUNCTION_DEFINITION: {
         printf("function:\n");
-        print_ast_recursive("ret:", tu, node->fun.ret_type, level + 1);
-        print_ast_recursive("nam:", tu, node->fun.name, level + 1);
-        print_ast_recursive("bdy:", tu, node->fun.body, level + 1);
+        RECUR_INFO("ret:", node->fun.ret_type);
+        RECUR_INFO("nam:", node->fun.name);
+        RECUR_INFO("bdy:", node->fun.body);
         break;
     }
     case NODE_RETURN: {
         printf("return:\n");
-        print_ast_recursive(nullptr, tu, node->ret.expr, level + 1);
+        RECUR(node->ret.expr);
         break;
     }
     case NODE_ERROR: {
@@ -276,6 +269,8 @@ static void print_ast_recursive(const char *info, struct tu *tu, int node_id, in
         printf("unknown\n");
     }
 }
+#undef RECUR
+#undef RECUR_INFO
 
 void print_ast(struct tu *tu) {
     print_ast_recursive(nullptr, tu, 0, 0);
