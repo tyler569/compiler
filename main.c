@@ -14,7 +14,9 @@ int main() {
     // const char *source = "'\\\\', '\\'', '\\n', '\\t', -1, 2.2";
     // const char *source = "foo(a, b, c = 1)() && d[*a++]++";
     // const char *source = "sizeof(10), sizeof 10";
-    const char *source = "int a, *b, c[], d(), *e(), (*f)(), g[100];\nstatic_assert(x == 10, \"message\");";
+    const char *source = "int a, *b, c[], d(), *e(), (*f)(), g[100];\n"
+                         "static_assert(x == 10, \"message\");\n"
+                         "a += *b;";
 
     struct tu *tu = &(struct tu){
         .source = source,
@@ -24,14 +26,6 @@ int main() {
     };
 
     tokenize(tu);
-
-    // for (struct token *t = tokens; t->type != TOKEN_EOF; t += 1) {
-    //     fputs("token", stdout);
-    //     print_token_type(t);
-    //     printf("@(%i:%i) '%.*s'\n", t->line, t->column, t->len, &source[t->index]);
-    //     print_and_highlight(source, t);
-    // }
-
     parse(tu);
     print_ast(tu);
 }
