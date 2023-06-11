@@ -419,7 +419,3 @@ static int parse_assignment_expression(struct context *context) {
 PARSE_BINOP(parse_expression, parse_assignment_expression, token->type == ',')
 
 // end expressions
-
-static int parse_type_name(struct context *context) {
-
-}
