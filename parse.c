@@ -39,6 +39,7 @@ static void eat(struct context *, int token_type);
 
 static int parse_assignment_expression(struct context *);
 static int parse_expression(struct context *);
+static int parse_declaration(struct context *context);
 
 struct node *parse(struct token *tokens, const char *source) {
     struct context *context = &(struct context){
@@ -54,45 +55,10 @@ struct node *parse(struct token *tokens, const char *source) {
     int n = 0;
 
     while (more_data(context) && context->errors == 0 && n < MAX_BLOCK_MEMBERS) {
-        // parse_external_declaration(context);
-        root->root.children[n++] = parse_expression(context);
+        root->root.children[n++] = parse_declaration(context);
     }
 
     return root;
-}
-
-// C23(N3096) 6.7.2.1
-static const char *typelist[] = {
-    "void",
-    "char",
-    "short",
-    "int",
-    "long",
-    "float",
-    "double",
-    "signed",
-    "unsigned",
-};
-
-static bool is_typename(struct context *context, struct token *first, size_t count) {
-    if (count > 1) return false;
-    if (first->type != TOKEN_IDENT) return false;
-
-    for (int i = 0; i < ARRAY_LEN(typelist); i += 1) {
-        if (tokenmatch(context, first, typelist[i])) return true;
-    }
-    return false;
-}
-
-static const char *tokenstring(struct context *context, struct token *token) {
-    return context->source + token->index;
-}
-
-static bool tokenmatch(struct context *context, struct token *token, const char *word) {
-    if (token->type != TOKEN_IDENT) return false;
-    if (strlen(word) != token->len) return false;
-
-    return strncmp(tokenstring(context, token), word, token->len) == 0;
 }
 
 static bool more_data(struct context *context) {
@@ -119,6 +85,9 @@ static struct node *new(struct context *context, enum node_type type) {
 }
 
 static int id(struct context *context, struct node *node) {
+    if (node == nullptr) {
+        exit(1);
+    }
     return (int)(node - context->ta.nodes);
 }
 
@@ -143,6 +112,7 @@ static void pass(struct context *context) {
 static void eat(struct context *context, int token_type) {
     if (TOKEN(context)->type != token_type) {
         report_error(context, "expected eat, found wrong");
+        print_token_type(TOKEN(context));
     }
     pass(context);
 }
@@ -153,7 +123,7 @@ static void print_space(int level) {
 
 #define GET(n) &root[(n)]
 static void print_ast_recursive(const char *info, struct node *root, struct node *node, const char *source, int level) {
-    if (level > 10) return;
+    if (level > 10) exit(1);
     print_space(level);
     if (info) printf("%s ", info);
 
@@ -224,6 +194,39 @@ static void print_ast_recursive(const char *info, struct node *root, struct node
         for (int i = 0; i < MAX_FUNCTION_ARGS && node->function_call.args[i] != 0; i += 1) {
             print_ast_recursive("arg:", root, GET(node->function_call.args[i]), source, level + 1);
         }
+        break;
+    }
+    case NODE_DECLARATION: {
+        printf("decl:\n");
+        struct node *type = GET(node->decl.type);
+        print_ast_recursive("typ:", root, type, source, level + 1);
+        for (int i = 0; i < MAX_DECLARATORS && node->decl.declarators[i] != 0; i += 1) {
+            print_ast_recursive("dcl:", root, GET(node->decl.declarators[i]), source, level + 1);
+        }
+        break;
+    }
+    case NODE_TYPE_SPECIFIER: {
+        printf("type: %.*s\n", token->len, &source[token->index]);
+        break;
+    }
+    case NODE_DECLARATOR: {
+        printf("d: %.*s\n", token->len, &source[token->index]);
+        if (node->declarator.inner) {
+            struct node *inner = GET(node->declarator.inner);
+            print_ast_recursive(nullptr, root, inner, source, level + 1);
+        }
+        break;
+    }
+    case NODE_FUNCTION_DECLARATOR: {
+        printf("d.func:\n");
+        print_ast_recursive(nullptr, root, GET(node->funcall_declarator.inner), source, level + 1);
+        break;
+    }
+    case NODE_ARRAY_DECLARATOR: {
+        printf("d.array:\n");
+        print_ast_recursive("arr:", root, GET(node->array_declarator.inner), source, level + 1);
+        if (node->array_declarator.subscript)
+            print_ast_recursive("sub:", root, GET(node->array_declarator.subscript), source, level + 1);
         break;
     }
     case NODE_ERROR: {
@@ -419,3 +422,147 @@ static int parse_assignment_expression(struct context *context) {
 PARSE_BINOP(parse_expression, parse_assignment_expression, token->type == ',')
 
 // end expressions
+
+static bool is_type_qualifier(struct token *token) {
+    // C23(N3096) 6.7.3.1
+    return token->type == TOKEN_CONST ||
+        token->type == TOKEN_RESTRICT ||
+        token->type == TOKEN_VOLATILE ||
+        token->type == TOKEN__ATOMIC;
+}
+
+static bool is_storage_class(struct token *token) {
+    // C23(N3096) 6.7.1.1
+    return token->type == TOKEN_AUTO ||
+        token->type == TOKEN_CONSTEXPR ||
+        token->type == TOKEN_EXTERN ||
+        token->type == TOKEN_REGISTER ||
+        token->type == TOKEN_STATIC ||
+        token->type == TOKEN_THREAD_LOCAL ||
+        token->type == TOKEN_TYPEDEF;
+}
+
+static bool is_bare_type_specifier(struct token *token) {
+    // C23(N3096) 6.7.2.1
+    return token->type == TOKEN_VOID ||
+        token->type == TOKEN_CHAR ||
+        token->type == TOKEN_SHORT ||
+        token->type == TOKEN_INT_ ||
+        token->type == TOKEN_LONG ||
+        token->type == TOKEN_FLOAT ||
+        token->type == TOKEN_DOUBLE ||
+        token->type == TOKEN_SIGNED ||
+        token->type == TOKEN_BOOL ||
+        token->type == TOKEN__DECIMAL32 ||
+        token->type == TOKEN__DECIMAL64 ||
+        token->type == TOKEN__DECIMAL128;
+}
+
+static bool is_function_specifier(struct token *token) {
+    // C23(N3096) 6.7.4.1
+    return token->type == TOKEN_INLINE ||
+        token->type == TOKEN__NORETURN;
+}
+
+static int parse_type_specifier(struct context *context) {
+    struct token *token = TOKEN(context);
+
+    if (is_bare_type_specifier(token)) {
+        struct node *node = new(context, NODE_TYPE_SPECIFIER);
+        pass(context);
+        return id(context, node);
+    } else {
+        return report_error_node(context, "non-basic type specifiers are not yet supported");
+    }
+}
+
+static int parse_type_specifier_qualifier_list(struct context *context) {
+    struct token *token = TOKEN(context);
+
+    while (is_bare_type_specifier(token) || is_type_qualifier(token)) {
+    }
+
+    return report_error_node(context, "todo 123123212412");
+}
+
+static int parse_direct_declarator(struct context *);
+
+static int parse_declarator(struct context *context) {
+    struct token *token = TOKEN(context);
+
+    if (token->type == '*') {
+        struct node *node = new(context, NODE_DECLARATOR);
+        pass(context);
+        node->unary_op.inner = parse_declarator(context);
+        return id(context, node);
+    } else {
+        return parse_direct_declarator(context);
+    }
+}
+
+static int parse_direct_declarator(struct context *context) {
+    int node_id = -1;
+
+    switch (TOKEN(context)->type) {
+    case TOKEN_IDENT: {
+        struct node *node = new(context, NODE_DECLARATOR);
+        pass(context);
+        node_id = id(context, node);
+        break;
+    }
+    case '(': {
+        pass(context);
+        node_id = parse_declarator(context);
+        eat(context, ')');
+        break;
+    }
+    }
+
+    if (node_id == -1) {
+        return report_error_node(context, "unable to parse declarator");
+    }
+
+    struct node *node = nullptr;
+
+    bool cont = true;
+    while (cont) {
+        switch (TOKEN(context)->type) {
+        case '[': {
+            node = new(context, NODE_ARRAY_DECLARATOR);
+            pass(context);
+            node->array_declarator.inner = node_id;
+            if (TOKEN(context)->type != ']')
+                node->array_declarator.subscript = parse_assignment_expression(context);
+            eat(context, ']');
+            node_id = id(context, node);
+            break;
+        }
+        case '(': {
+            node = new(context, NODE_FUNCTION_DECLARATOR);
+            pass(context);
+            node->funcall_declarator.inner = node_id;
+            // TODO: args
+            eat(context, ')');
+            node_id = id(context, node);
+            break;
+        }
+        default:
+            cont = false;
+        }
+    }
+
+    return node_id;
+}
+
+static int parse_declaration(struct context *context) {
+    struct node *node = new(context, NODE_DECLARATION);
+
+    node->decl.type = parse_type_specifier(context);
+    int i = 0;
+    while (TOKEN(context)->type != ';' && TOKEN(context)->type != TOKEN_EOF) {
+        node->decl.declarators[i++] = parse_declarator(context);
+        if (TOKEN(context)->type == ',') eat(context, ',');
+    }
+
+    return id(context, node);
+}

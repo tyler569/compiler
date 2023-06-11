@@ -14,7 +14,8 @@ int main() {
     // const char *source = "a = b, c |= d, 1 ? 2 : 3, -10, *a = b++, *a++, (*a)++, (2+2) * 12";
     // const char *source = "'\\\\', '\\'', '\\n', '\\t', -1, 2.2";
     // const char *source = "foo(a, b, c = 1)() && d[*a++]++";
-    const char *source = "sizeof(10), sizeof 10";
+    // const char *source = "sizeof(10), sizeof 10";
+    const char *source = "int a, *b, c[], d(), *e(), (*f)()";
 
     struct token *tokens = tokenize(strlen(source), source, "");
 

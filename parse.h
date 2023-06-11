@@ -16,14 +16,20 @@ enum node_type {
     NODE_SUBSCRIPT,
     NODE_TERNARY,
     NODE_FUNCTION_CALL,
+    NODE_DECLARATION,
+    NODE_TYPE_SPECIFIER,
+    NODE_DECLARATOR,
+    NODE_ARRAY_DECLARATOR,
+    NODE_FUNCTION_DECLARATOR,
 };
 
 #define MAX_BLOCK_MEMBERS 10
 #define MAX_FUNCTION_ARGS 9
+#define MAX_DECLARATORS 9
 
 struct node {
-    enum node_type type;
     struct token *token;
+    enum node_type type;
     union {
         struct {
             int children[MAX_BLOCK_MEMBERS];
@@ -52,6 +58,21 @@ struct node {
             int inner;
             int args[MAX_FUNCTION_ARGS];
         } function_call;
+        struct {
+            int inner;
+        } declarator;
+        struct {
+            int inner;
+            int args[MAX_FUNCTION_ARGS];
+        } funcall_declarator;
+        struct {
+            int inner;
+            int subscript;
+        } array_declarator;
+        struct {
+            int type;
+            int declarators[MAX_DECLARATORS];
+        } decl;
     };
 };
 
