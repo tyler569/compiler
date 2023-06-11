@@ -1,6 +1,7 @@
 #include "parse.h"
 #include "token.h"
 #include "util.h"
+#include "diag.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -93,11 +94,14 @@ static int id(struct context *context, struct node *node) {
 
 static void report_error(struct context *context, const char *message) {
     fprintf(stderr, "ast error: %s\n", message);
+    print_and_highlight(context->source, TOKEN(context));
     context->errors += 1;
 }
 
 static int report_error_node(struct context *context, const char *message) {
     struct node *node = new(context, NODE_ERROR);
+    fprintf(stderr, "new error: %s\n", message);
+    print_and_highlight(context->source, TOKEN(context));
     pass(context);
     return id(context, node);
 }
@@ -111,8 +115,10 @@ static void pass(struct context *context) {
 // can be genericized.
 static void eat(struct context *context, int token_type) {
     if (TOKEN(context)->type != token_type) {
-        report_error(context, "expected eat, found wrong");
-        print_token_type(TOKEN(context));
+        char buffer[128];
+        snprintf(buffer, 128, "eat: expected '%s', found '%s'",
+                 token_type_string(token_type), token_type_string(TOKEN(context)->type));
+        report_error(context, buffer);
     }
     pass(context);
 }
@@ -559,7 +565,10 @@ static int parse_declaration(struct context *context) {
 
     node->decl.type = parse_type_specifier(context);
     int i = 0;
-    while (TOKEN(context)->type != ';' && TOKEN(context)->type != TOKEN_EOF) {
+    //while (token->type == '*' || token->type == '(' || token->type == TOKEN_IDENT) {
+    while ((TOKEN(context)->type == '*' || TOKEN(context)->type == '(' ||
+        TOKEN(context)->type == TOKEN_IDENT) && i < MAX_DECLARATORS) {
+
         node->decl.declarators[i++] = parse_declarator(context);
         if (TOKEN(context)->type == ',') eat(context, ',');
     }

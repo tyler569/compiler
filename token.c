@@ -109,6 +109,7 @@ static void skip_whitespace(struct state *state) {
         }
         if (c == '\t') {
             state->extra_columns += SPACES_PER_TAB - 1;
+            state->extra_columns &= ~(1 - SPACES_PER_TAB);
         }
         c = CHAR(state);
     }
@@ -470,7 +471,69 @@ void print_token_type(struct token *token) {
     CASE(TOKEN_SHIFT_LEFT, "<<")
     CASE(TOKEN_SHIFT_LEFT_EQUAL, "<<=")
     CASE(TOKEN_ELLIPSES, "...")
+    CASE(TOKEN_COLON_COLON, "::")
 #undef CASE
     }
     putchar(')');
+}
+
+const char *token_type_string(int token_type) {
+    if (token_type >= TOKEN_FIRST_KEYWORD && token_type < TOKEN_LAST_KEYWORD) {
+        return keywords[token_type - TOKEN_FIRST_KEYWORD];
+    }
+    switch (token_type) {
+    case '+': return "+";
+    case '-': return "-";
+    case '*': return "*";
+    case '/': return "/";
+    case '%': return "%";
+    case '!': return "!";
+    case '.': return ".";
+    case '<': return "<";
+    case '>': return ">";
+    case '[': return "[";
+    case ']': return "]";
+    case '(': return "(";
+    case ')': return ")";
+    case '^': return "^";
+    case '&': return "&";
+    case '|': return "|";
+    case '~': return "~";
+    case ',': return ",";
+#define CASE(tt, str) case (tt): return str;
+    CASE(TOKEN_NULL, "null")
+    CASE(TOKEN_IDENT, "ident")
+    CASE(TOKEN_INT, "int")
+    CASE(TOKEN_FLOAT, "float")
+    CASE(TOKEN_STRING, "string")
+    CASE(TOKEN_EOF, "eof")
+    CASE(TOKEN_ARROW, "->")
+    CASE(TOKEN_EQUAL_EQUAL, "==")
+    CASE(TOKEN_NOT_EQUAL, "!=")
+    CASE(TOKEN_GREATER_EQUAL, ">=")
+    CASE(TOKEN_LESS_EQUAL, "<=")
+    CASE(TOKEN_PLUS_EQUAL, "+=")
+    CASE(TOKEN_MINUS_EQUAL, "-=")
+    CASE(TOKEN_STAR_EQUAL, "*=")
+    CASE(TOKEN_DIVIDE_EQUAL, "/=")
+    CASE(TOKEN_MOD_EQUAL, "%=")
+    CASE(TOKEN_AND_EQUAL, "&&=")
+    CASE(TOKEN_OR_EQUAL, "||=")
+    CASE(TOKEN_BITAND_EQUAL, "&=")
+    CASE(TOKEN_BITOR_EQUAL, "|=")
+    CASE(TOKEN_BITXOR_EQUAL, "^=")
+    CASE(TOKEN_AND, "&&")
+    CASE(TOKEN_OR, "||")
+    CASE(TOKEN_PLUS_PLUS, "++")
+    CASE(TOKEN_MINUS_MINUS, "--")
+    CASE(TOKEN_SHIFT_RIGHT, ">>")
+    CASE(TOKEN_SHIFT_RIGHT_EQUAL, ">>=")
+    CASE(TOKEN_SHIFT_LEFT, "<<")
+    CASE(TOKEN_SHIFT_LEFT_EQUAL, "<<=")
+    CASE(TOKEN_ELLIPSES, "...")
+    CASE(TOKEN_COLON_COLON, "::")
+#undef CASE
+    default:
+        return "unknown token type";
+    }
 }

@@ -3,4 +3,4 @@ project(compiler C)
 
 set(CMAKE_C_STANDARD 23)
 
-add_executable(compiler main.c token.c token.h parse.c parse.h)
+add_executable(compiler main.c token.c token.h parse.c parse.h diag.c diag.h)

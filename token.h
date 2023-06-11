@@ -117,5 +117,6 @@ struct token {
 
 struct token *tokenize(size_t len, const char *source, const char *filename);
 void print_token_type(struct token *);
+const char *token_type_string(int token_type);
 
 #endif //COMPILER_TOKEN_H
