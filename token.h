@@ -115,7 +115,10 @@ struct token {
     };
 };
 
-struct token *tokenize(size_t len, const char *source, const char *filename);
+struct tu;
+
+int tokenize(struct tu *);
+
 void print_token_type(struct token *);
 const char *token_type_string(int token_type);
 

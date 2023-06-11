@@ -21,6 +21,7 @@ enum node_type {
     NODE_DECLARATOR,
     NODE_ARRAY_DECLARATOR,
     NODE_FUNCTION_DECLARATOR,
+    NODE_STATIC_ASSERT,
 };
 
 #define MAX_BLOCK_MEMBERS 10
@@ -73,6 +74,10 @@ struct node {
             int type;
             int declarators[MAX_DECLARATORS];
         } decl;
+        struct {
+            int expr;
+            int message;
+        } st_assert;
     };
 };
 
@@ -113,7 +118,9 @@ struct type {
     };
 };
 
-struct node *parse(struct token *tokens, const char *source);
-void print_ast(struct node *root, const char *source);
+struct tu;
+
+int parse(struct tu *);
+void print_ast(struct tu *);
 
 #endif //COMPILER_PARSE_H

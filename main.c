@@ -5,9 +5,7 @@
 #include "diag.h"
 #include "token.h"
 #include "parse.h"
-
-void print_line(const char *source, int position, int line);
-void print_and_highlight(const char *source, struct token *token);
+#include "tu.h"
 
 int main() {
     // const char *source = "int x = 10;\nint foo() { return 10 << 3; }";
@@ -16,9 +14,16 @@ int main() {
     // const char *source = "'\\\\', '\\'', '\\n', '\\t', -1, 2.2";
     // const char *source = "foo(a, b, c = 1)() && d[*a++]++";
     // const char *source = "sizeof(10), sizeof 10";
-    const char *source = "int a, *b, c[], d(), *e(), (*f)()";
+    const char *source = "int a, *b, c[], d(), *e(), (*f)(), g[100];\nstatic_assert(x == 10, \"message\");";
 
-    struct token *tokens = tokenize(strlen(source), source, "");
+    struct tu *tu = &(struct tu){
+        .source = source,
+        .filename = "",
+        .source_len = strlen(source),
+        .abort = false // true,
+    };
+
+    tokenize(tu);
 
     // for (struct token *t = tokens; t->type != TOKEN_EOF; t += 1) {
     //     fputs("token", stdout);
@@ -27,6 +32,6 @@ int main() {
     //     print_and_highlight(source, t);
     // }
 
-    struct node *root = parse(tokens, source);
-    print_ast(root, source);
+    parse(tu);
+    print_ast(tu);
 }

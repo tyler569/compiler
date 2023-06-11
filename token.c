@@ -1,5 +1,6 @@
 #include "token.h"
 #include "util.h"
+#include "tu.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -47,12 +48,11 @@ static void read_string(struct state *);
 static void read_char(struct state *);
 static void read_symbol(struct state *);
 
-
-struct token *tokenize(size_t len, const char *source, const char *filename) {
+int tokenize(struct tu *tu) {
     struct state *state = &(struct state){
-        .len = len,
-        .source = source,
-        .filename = filename,
+        .len = tu->source_len,
+        .source = tu->source,
+        .filename = tu->filename,
     };
 
     while (more_data(state)) {
@@ -75,7 +75,10 @@ struct token *tokenize(size_t len, const char *source, const char *filename) {
     struct token *token = new(state, TOKEN_EOF);
     end(state, token);
 
-    return state->ta.tokens;
+    tu->tokens = state->ta.tokens;
+    tu->tokens_len = state->ta.len;
+
+    return state->errors;
 }
 
 // Eat the character 'c' from the tokenization state. Create an error if this is not the correct character.

@@ -2,6 +2,7 @@
 #include "token.h"
 #include "util.h"
 #include "diag.h"
+#include "tu.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -14,6 +15,7 @@ typedef int node_pos;
 #define PEEK(context) (&context->tokens[context->position + 1])
 
 struct context {
+    struct tu *tu;
     struct token *tokens;
     int position;
     const char *source;
@@ -28,24 +30,23 @@ struct context {
 
 // static functions
 static bool is_typename(struct context *, struct token *first, size_t count);
-static const char *tokenstring(struct context *, struct token *);
-static bool tokenmatch(struct context *, struct token *, const char *word);
 static bool more_data(struct context *);
 static struct node *new(struct context *, enum node_type);
 static int id(struct context *, struct node *);
 static void report_error(struct context *, const char *message);
 static int report_error_node(struct context *, const char *message);
 static void pass(struct context *);
-static void eat(struct context *, int token_type);
+static void eat(struct context *, int token_type, const char *function_name);
 
 static int parse_assignment_expression(struct context *);
 static int parse_expression(struct context *);
 static int parse_declaration(struct context *context);
 
-struct node *parse(struct token *tokens, const char *source) {
+int parse(struct tu *tu) {
     struct context *context = &(struct context){
-        .tokens = tokens,
-        .source = source,
+        .tu = tu,
+        .tokens = tu->tokens,
+        .source = tu->source,
     };
 
     struct node *root = new(context, NODE_ROOT);
@@ -59,11 +60,14 @@ struct node *parse(struct token *tokens, const char *source) {
         root->root.children[n++] = parse_declaration(context);
     }
 
-    return root;
+    tu->nodes = context->ta.nodes;
+    tu->nodes_len = context->ta.len;
+
+    return context->errors;
 }
 
 static bool more_data(struct context *context) {
-    return context->tokens[context->position].type != TOKEN_EOF;
+    return TOKEN(context)->type != TOKEN_EOF;
 }
 
 static struct node *new(struct context *context, enum node_type type) {
@@ -96,12 +100,17 @@ static void report_error(struct context *context, const char *message) {
     fprintf(stderr, "ast error: %s\n", message);
     print_and_highlight(context->source, TOKEN(context));
     context->errors += 1;
+
+    if (context->tu->abort) exit(1);
 }
 
 static int report_error_node(struct context *context, const char *message) {
     struct node *node = new(context, NODE_ERROR);
     fprintf(stderr, "new error: %s\n", message);
     print_and_highlight(context->source, TOKEN(context));
+
+    if (context->tu->abort) exit(1);
+
     pass(context);
     return id(context, node);
 }
@@ -113,33 +122,38 @@ static void pass(struct context *context) {
 // This isn't very useful right now since it just advances no matter what.
 // It should probably add an error node or something, but I'm not sure that
 // can be genericized.
-static void eat(struct context *context, int token_type) {
+static void eat(struct context *context, int token_type, const char *function_name) {
     if (TOKEN(context)->type != token_type) {
         char buffer[128];
-        snprintf(buffer, 128, "eat: expected '%s', found '%s'",
-                 token_type_string(token_type), token_type_string(TOKEN(context)->type));
+        snprintf(buffer, 128, "eat: expected '%s', found '%s' in %s",
+                 token_type_string(token_type),
+                 token_type_string(TOKEN(context)->type),
+                 function_name);
         report_error(context, buffer);
     }
     pass(context);
 }
 
+#define eat(ctx, typ) eat(ctx, typ, __func__)
+
 static void print_space(int level) {
     for (int i = 0; i < level; i++) fputs("  ", stdout);
 }
 
-#define GET(n) &root[(n)]
-static void print_ast_recursive(const char *info, struct node *root, struct node *node, const char *source, int level) {
+static void print_ast_recursive(const char *info, struct tu *tu, int node_id, int level) {
     if (level > 10) exit(1);
     print_space(level);
     if (info) printf("%s ", info);
 
+    struct node *node = tu_node(tu, node_id);
     struct token *token = node->token;
+    const char *source = tu->source;
 
     switch (node->type) {
     case NODE_ROOT: {
         printf("root:\n");
         for (int i = 0; i < MAX_BLOCK_MEMBERS && node->root.children[i]; i++) {
-            print_ast_recursive(nullptr, root, GET(node->root.children[i]), source, level + 1);
+            print_ast_recursive(nullptr, tu, node->root.children[i], level + 1);
         }
         break;
     }
@@ -157,57 +171,55 @@ static void print_ast_recursive(const char *info, struct node *root, struct node
     }
     case NODE_BINARY_OP: {
         printf("binop: %.*s\n", token->len, &source[token->index]);
-        struct node *left = GET(node->binop.left);
-        struct node *right = GET(node->binop.right);
-        print_ast_recursive(nullptr, root, left, source, level + 1);
-        print_ast_recursive(nullptr, root, right, source, level + 1);
+        int left = node->binop.left;
+        int right = node->binop.right;
+        print_ast_recursive(nullptr, tu, left, level + 1);
+        print_ast_recursive(nullptr, tu, right, level + 1);
         break;
     }
     case NODE_UNARY_OP: {
         printf("unop: %.*s\n", token->len, &source[token->index]);
-        struct node *inner = GET(node->unary_op.inner);
-        print_ast_recursive(nullptr, root, inner, source, level + 1);
+        int inner = node->unary_op.inner;
+        print_ast_recursive(nullptr, tu, inner, level + 1);
         break;
     }
     case NODE_POSTFIX_OP: {
         printf("postfix: %.*s\n", token->len, &source[token->index]);
-        struct node *inner = GET(node->unary_op.inner);
-        print_ast_recursive(nullptr, root, inner, source, level + 1);
+        int inner = node->unary_op.inner;
+        print_ast_recursive(nullptr, tu, inner, level + 1);
         break;
     }
     case NODE_SUBSCRIPT: {
         printf("subscript:\n");
-        struct node *inner = GET(node->subscript.inner);
-        struct node *subscript = GET(node->subscript.subscript);
-        print_ast_recursive("arr:", root, inner, source, level + 1);
-        print_ast_recursive("sub:", root, subscript, source, level + 1);
+        int inner = node->subscript.inner;
+        int subscript = node->subscript.subscript;
+        print_ast_recursive("arr:", tu, inner, level + 1);
+        print_ast_recursive("sub:", tu, subscript, level + 1);
         break;
     }
     case NODE_TERNARY: {
         printf("ternary:\n");
-        struct node *cond = GET(node->ternary.condition);
-        struct node *b_true = GET(node->ternary.branch_true);
-        struct node *b_false = GET(node->ternary.branch_false);
-        print_ast_recursive("cnd:", root, cond, source, level + 1);
-        print_ast_recursive("yes:", root, b_true, source, level + 1);
-        print_ast_recursive(" no:", root, b_false, source, level + 1);
+        int cond = node->ternary.condition;
+        int b_true = node->ternary.branch_true;
+        int b_false = node->ternary.branch_false;
+        print_ast_recursive("cnd:", tu, cond, level + 1);
+        print_ast_recursive("yes:", tu, b_true, level + 1);
+        print_ast_recursive(" no:", tu, b_false, level + 1);
         break;
     }
     case NODE_FUNCTION_CALL: {
         printf("funcall:\n");
-        struct node *function = GET(node->function_call.inner);
-        print_ast_recursive("fun:", root, function, source, level + 1);
+        print_ast_recursive("fun:", tu, node->function_call.inner, level + 1);
         for (int i = 0; i < MAX_FUNCTION_ARGS && node->function_call.args[i] != 0; i += 1) {
-            print_ast_recursive("arg:", root, GET(node->function_call.args[i]), source, level + 1);
+            print_ast_recursive("arg:", tu, node->function_call.args[i], level + 1);
         }
         break;
     }
     case NODE_DECLARATION: {
         printf("decl:\n");
-        struct node *type = GET(node->decl.type);
-        print_ast_recursive("typ:", root, type, source, level + 1);
+        print_ast_recursive("typ:", tu, node->decl.type, level + 1);
         for (int i = 0; i < MAX_DECLARATORS && node->decl.declarators[i] != 0; i += 1) {
-            print_ast_recursive("dcl:", root, GET(node->decl.declarators[i]), source, level + 1);
+            print_ast_recursive("dcl:", tu, node->decl.declarators[i], level + 1);
         }
         break;
     }
@@ -218,21 +230,27 @@ static void print_ast_recursive(const char *info, struct node *root, struct node
     case NODE_DECLARATOR: {
         printf("d: %.*s\n", token->len, &source[token->index]);
         if (node->declarator.inner) {
-            struct node *inner = GET(node->declarator.inner);
-            print_ast_recursive(nullptr, root, inner, source, level + 1);
+            print_ast_recursive(nullptr, tu, node->declarator.inner, level + 1);
         }
         break;
     }
     case NODE_FUNCTION_DECLARATOR: {
         printf("d.func:\n");
-        print_ast_recursive(nullptr, root, GET(node->funcall_declarator.inner), source, level + 1);
+        print_ast_recursive(nullptr, tu, node->funcall_declarator.inner, level + 1);
         break;
     }
     case NODE_ARRAY_DECLARATOR: {
         printf("d.array:\n");
-        print_ast_recursive("arr:", root, GET(node->array_declarator.inner), source, level + 1);
+        print_ast_recursive("arr:", tu, node->array_declarator.inner, level + 1);
         if (node->array_declarator.subscript)
-            print_ast_recursive("sub:", root, GET(node->array_declarator.subscript), source, level + 1);
+            print_ast_recursive("sub:", tu, node->array_declarator.subscript, level + 1);
+        break;
+    }
+    case NODE_STATIC_ASSERT: {
+        printf("static assert:\n");
+        print_ast_recursive("tst:", tu, node->st_assert.expr, level + 1);
+        if (node->st_assert.message)
+            print_ast_recursive("msg:", tu, node->st_assert.message, level + 1);
         break;
     }
     case NODE_ERROR: {
@@ -243,10 +261,9 @@ static void print_ast_recursive(const char *info, struct node *root, struct node
         printf("unknown\n");
     }
 }
-#undef GET
 
-void print_ast(struct node *root, const char *source) {
-    print_ast_recursive(nullptr, root, root, source, 0);
+void print_ast(struct tu *tu) {
+    print_ast_recursive(nullptr, tu, 0, 0);
 }
 
 static int parse_primary_expression(struct context *context) {
@@ -561,17 +578,34 @@ static int parse_direct_declarator(struct context *context) {
 }
 
 static int parse_declaration(struct context *context) {
+    if (TOKEN(context)->type == TOKEN_STATIC_ASSERT) {
+        struct node* node = new(context, NODE_STATIC_ASSERT);
+        pass(context);
+        eat(context, '(');
+        node->st_assert.expr = parse_assignment_expression(context);
+        if (TOKEN(context)->type == ',') {
+            eat(context, ',');
+            if (TOKEN(context)->type == TOKEN_STRING) {
+                node->st_assert.message = report_error_node(context, "static assert string literals not supported");
+            } else {
+                node->st_assert.message = report_error_node(context, "static assert message must be string literal");
+            }
+        }
+        eat(context, ')');
+        eat(context, ';');
+        return id(context, node);
+    }
+
     struct node *node = new(context, NODE_DECLARATION);
 
     node->decl.type = parse_type_specifier(context);
     int i = 0;
-    //while (token->type == '*' || token->type == '(' || token->type == TOKEN_IDENT) {
-    while ((TOKEN(context)->type == '*' || TOKEN(context)->type == '(' ||
-        TOKEN(context)->type == TOKEN_IDENT) && i < MAX_DECLARATORS) {
-
+    while (TOKEN(context)->type != ';' && i < MAX_DECLARATORS) {
         node->decl.declarators[i++] = parse_declarator(context);
-        if (TOKEN(context)->type == ',') eat(context, ',');
+        if (TOKEN(context)->type != ';')
+            eat(context, ',');
     }
+    eat(context, ';');
 
     return id(context, node);
 }
