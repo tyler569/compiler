@@ -162,6 +162,13 @@ static void print_ast_recursive(const char *info, struct tu *tu, int node_id, in
         }
         break;
     }
+    case NODE_BLOCK: {
+        printf("block:\n");
+        for (int i = 0; i < MAX_BLOCK_MEMBERS && node->block.children[i]; i++) {
+            RECUR(node->block.children[i]);
+        }
+        break;
+    }
     case NODE_INT_LITERAL: {
         printf("int: %.*s (%llu)\n", token->len, &source[token->index], token->int_.value);
         break;
@@ -205,9 +212,9 @@ static void print_ast_recursive(const char *info, struct tu *tu, int node_id, in
     }
     case NODE_FUNCTION_CALL: {
         printf("funcall:\n");
-        RECUR_INFO("fun:", node->function_call.inner);
-        for (int i = 0; i < MAX_FUNCTION_ARGS && node->function_call.args[i] != 0; i += 1) {
-            RECUR_INFO("arg", node->function_call.args[i]);
+        RECUR_INFO("fun:", node->funcall.inner);
+        for (int i = 0; i < MAX_FUNCTION_ARGS && node->funcall.args[i] != 0; i += 1) {
+            RECUR_INFO("arg", node->funcall.args[i]);
         }
         break;
     }
@@ -225,21 +232,21 @@ static void print_ast_recursive(const char *info, struct tu *tu, int node_id, in
     }
     case NODE_DECLARATOR: {
         printf("d: %.*s\n", token->len, &source[token->index]);
-        if (node->declarator.inner) {
-            RECUR(node->declarator.inner);
+        if (node->d.inner) {
+            RECUR(node->d.inner);
         }
         break;
     }
     case NODE_FUNCTION_DECLARATOR: {
         printf("d.func:\n");
-        RECUR(node->funcall_declarator.inner);
+        RECUR(node->d.inner);
         break;
     }
     case NODE_ARRAY_DECLARATOR: {
         printf("d.array:\n");
-        RECUR_INFO("arr:", node->array_declarator.inner);
-        if (node->array_declarator.subscript)
-            RECUR_INFO("sub:", node->array_declarator.subscript);
+        RECUR_INFO("arr:", node->d.inner);
+        if (node->d.arr.subscript)
+            RECUR_INFO("sub:", node->d.arr.subscript);
         break;
     }
     case NODE_STATIC_ASSERT: {
@@ -346,10 +353,10 @@ static int parse_postfix_expression(struct context *context) {
         case '(': {
             struct node *node = new(context, NODE_FUNCTION_CALL);
             pass(context);
-            node->function_call.inner = inner;
+            node->funcall.inner = inner;
             int i = 0;
             while (TOKEN(context)->type != ')' && i < MAX_FUNCTION_ARGS) {
-                node->function_call.args[i++] = parse_assignment_expression(context);
+                node->funcall.args[i++] = parse_assignment_expression(context);
                 if (TOKEN(context)->type != ')') eat(context, ',');
             }
             eat(context, ')');
@@ -560,7 +567,7 @@ static int parse_direct_declarator(struct context *context) {
     }
 
     if (node_id == -1) {
-        return report_error_node(context, "unable to parse declarator");
+        return report_error_node(context, "unable to parse d");
     }
 
     struct node *node = nullptr;
@@ -571,9 +578,9 @@ static int parse_direct_declarator(struct context *context) {
         case '[': {
             node = new(context, NODE_ARRAY_DECLARATOR);
             pass(context);
-            node->array_declarator.inner = node_id;
+            node->d.inner = node_id;
             if (TOKEN(context)->type != ']')
-                node->array_declarator.subscript = parse_assignment_expression(context);
+                node->d.arr.subscript = parse_assignment_expression(context);
             eat(context, ']');
             node_id = id(context, node);
             break;
@@ -581,7 +588,7 @@ static int parse_direct_declarator(struct context *context) {
         case '(': {
             node = new(context, NODE_FUNCTION_DECLARATOR);
             pass(context);
-            node->funcall_declarator.inner = node_id;
+            node->d.inner = node_id;
             // TODO: args
             eat(context, ')');
             node_id = id(context, node);
@@ -606,16 +613,10 @@ static int parse_full_declarator(struct context *context) {
     struct node *node = &context->ta.nodes[node_id];
     switch (node->type) {
     case NODE_DECLARATOR:
-        node->declarator.initializer = expr;
-        node->declarator.full = true;
-        break;
     case NODE_ARRAY_DECLARATOR:
-        node->array_declarator.initializer = expr;
-        node->array_declarator.full = true;
-        break;
     case NODE_FUNCTION_DECLARATOR:
-        node->funcall_declarator.initializer = expr;
-        node->funcall_declarator.full = true;
+        node->d.initializer = expr;
+        node->d.full = true;
         break;
     default:
     }
@@ -669,11 +670,11 @@ static int parse_expression_statement(struct context *context) {
 }
 
 static int parse_compound_statement(struct context *context) {
-    struct node *node = new(context, NODE_ROOT);
+    struct node *node = new(context, NODE_BLOCK);
     eat(context, '{');
     int i = 0;
     while (TOKEN(context)->type != '}') {
-        node->root.children[i++] = parse_statement(context);
+        node->block.children[i++] = parse_statement(context);
     }
     eat(context, '}');
     return id(context, node);
@@ -681,7 +682,7 @@ static int parse_compound_statement(struct context *context) {
 
 static int parse_label(struct context *context) {
     struct node *node = new(context, NODE_LABEL);
-    pass(context);
+    node->label.name = parse_ident(context);
     eat(context, ':');
     return id(context, node);
 }

@@ -23,6 +23,7 @@ enum node_type {
     NODE_FUNCTION_DECLARATOR,
     NODE_FUNCTION_DEFINITION,
     NODE_STATIC_ASSERT,
+    NODE_BLOCK,
     NODE_LABEL,
     NODE_RETURN,
     NODE_IF,
@@ -46,6 +47,9 @@ struct node {
             int children[MAX_BLOCK_MEMBERS];
         } root;
         struct {
+            int children[MAX_BLOCK_MEMBERS];
+        } block;
+        struct {
             int left;
             int right;
         } binop;
@@ -68,25 +72,21 @@ struct node {
         struct {
             int inner;
             int args[MAX_FUNCTION_ARGS];
-        } function_call;
+        } funcall;
         struct {
             int inner;
             int initializer;
             bool full;
-            int scope_id;
-        } declarator;
-        struct {
-            int inner;
-            int args[MAX_FUNCTION_ARGS];
-            int initializer;
-            bool full;
-        } funcall_declarator;
-        struct {
-            int inner;
-            int subscript;
-            int initializer;
-            bool full;
-        } array_declarator;
+            struct token *name;
+            union {
+                struct {
+                    int subscript;
+                } arr;
+                struct {
+                    int args[MAX_FUNCTION_ARGS];
+                } fun;
+            };
+        } d;
         struct {
             int type;
             int declarators[MAX_DECLARATORS];
@@ -103,6 +103,9 @@ struct node {
             int name;
             int body;
         } fun;
+        struct {
+            int name;
+        } label;
     };
 };
 

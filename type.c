@@ -2,10 +2,12 @@
 #include "tu.h"
 #include "token.h"
 #include "parse.h"
+#include "util.h"
 
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 #define SCOPE(n) &(context->sca.scopes[(n)])
 #define NODE(n) &(context->root[(n)])
@@ -13,6 +15,7 @@
 
 struct scope {
     struct token *token;
+    struct node *decl;
     int c_type;
     int parent;
     int block_depth;
@@ -33,10 +36,15 @@ struct context {
         size_t capacity;
         struct scope *scopes;
     } sca;
+    int errors;
 };
 
+int type_recur(struct context *context, struct node *node, int block_depth, int parent_scope);
 static int debug_create_type(struct context *context, int parent, enum base_type base, enum type_flags flags);
 static void print_type(struct context *context, int type_id);
+
+static struct type *new_type(struct context *context);
+static struct scope *new_scope(struct context *context);
 
 int type(struct tu *tu) {
     struct context *context = &(struct context) {
@@ -44,44 +52,23 @@ int type(struct tu *tu) {
         .root = tu->nodes,
     };
 
-    int t_null = debug_create_type(context, 0, TYPE_VOID, 0);
-    int t_void = debug_create_type(context, 0, TYPE_VOID, 0);
-    int t_const_void = debug_create_type(context, 0, TYPE_VOID, TF_CONST);
-    int t_ptr_const_void = debug_create_type(context, t_const_void, TYPE_POINTER, 0);
-    int t_fun_void = debug_create_type(context, t_void, TYPE_FUNCTION, 0);
+    // discard index 0 so it can be used for "none"
+    (void) new_type(context);
+    (void) new_scope(context);
 
-    int t_int = debug_create_type(context, 0, TYPE_SIGNED_INT, 0);
+    type_recur(context, context->root, 0, 0);
 
-    int t_alignas_int = debug_create_type(context, 0, TYPE_SIGNED_INT, 5 << TF_ALIGNAS_BIT);
-    int t_const_ptr_alignas_int = debug_create_type(context, t_alignas_int, TYPE_POINTER, TF_CONST);
+    for (int i = 0; i < context->tya.len; i += 1) {
+        print_type(context, i);
+        putc('\n', stderr);
+    }
 
-    int t_fun_int = debug_create_type(context, t_int, TYPE_FUNCTION, 0);
-    int t_ptr_fun_int = debug_create_type(context, t_fun_int, TYPE_POINTER, 0);
-
-    int t_ptr_int = debug_create_type(context, t_int, TYPE_POINTER, 0);
-    int t_fun_ptr_int = debug_create_type(context, t_ptr_int, TYPE_FUNCTION, 0);
-
-#define PRINT(t) do { print_type(context, (t)); fputc('\n', stderr); } while (0)
-    PRINT(t_void);
-    PRINT(t_const_void);
-    PRINT(t_ptr_const_void);
-    PRINT(t_fun_void);
-
-    PRINT(t_alignas_int);
-    PRINT(t_const_ptr_alignas_int);
-
-    PRINT(t_int);
-    PRINT(t_fun_int);
-    PRINT(t_ptr_fun_int);
-    PRINT(t_ptr_int);
-    PRINT(t_fun_ptr_int);
-#undef PRINT
-
-    return -1;
+    return context->errors;
 }
 
 static void report_error(struct context *context, const char *message) {
     fprintf(stderr, "typer error: %s\n", message);
+    context->errors += 1;
     exit(1);
 }
 
@@ -186,20 +173,135 @@ static int debug_create_type(struct context *context, int parent, enum base_type
     return type_id(context, type);
 }
 
+static const char *base_type_ids[] = {
+    [TYPE_VOID] = "void",
+    [TYPE_SIGNED_CHAR] = "char",
+    [TYPE_SIGNED_SHORT] = "short",
+    [TYPE_SIGNED_INT] = "int",
+    [TYPE_SIGNED_LONG] = "long",
+    [TYPE_FLOAT] = "float",
+    [TYPE_DOUBLE] = "double",
+    [TYPE_BOOL] = "bool",
+};
+
+int find_or_create(struct context *context, int inner, enum base_type base, enum type_flags flags) {
+    for (int i = 0; i < context->tya.len; i += 1) {
+        struct type *type = TYPE(i);
+        if (type->inner == inner && type->base == base && type->flags == flags)
+            return i;
+    }
+
+    struct type *ty = new_type(context);
+    ty->base = base;
+    ty->flags = flags;
+    ty->inner = inner;
+
+    return type_id(context, ty);
+}
+
+int find_or_create_type_inner(struct context *context, int typ, struct node *decl) {
+    switch (decl->type) {
+    case NODE_DECLARATOR: {
+        if (decl->d.inner) {
+            int inner = find_or_create_type_inner(context, typ, NODE(decl->d.inner));
+            return find_or_create(context, inner, TYPE_POINTER, 0);
+        } else {
+            return typ;
+        }
+    }
+    case NODE_FUNCTION_DECLARATOR: {
+        int inner = find_or_create_type_inner(context, typ, NODE(decl->d.inner));
+        return find_or_create(context, inner, TYPE_FUNCTION, 0);
+    }
+    case NODE_ARRAY_DECLARATOR: {
+        int inner = find_or_create_type_inner(context, typ, NODE(decl->d.inner));
+        return find_or_create(context, inner, TYPE_FUNCTION, 0);
+    }
+    default:
+        report_error(context, "invalid declarator type");
+        return 0;
+    }
+}
+
 int find_or_create_type(struct context *context, struct node *type, struct node *decl) {
+    enum base_type b_type = -1;
+    for (int i = 0; i < ARRAY_LEN(base_type_ids); i += 1) {
+        if (!base_type_ids[i]) continue;
+        if (strncmp(base_type_ids[i], &context->tu->source[type->token->index], type->token->len) == 0) {
+            b_type = i;
+        }
+    }
+    if (b_type == -1) {
+        report_error(context, "invalid type name");
+    }
+
+    int typ = find_or_create(context, 0, b_type, 0);
+
+    int decltype = find_or_create_type_inner(context, typ, decl);
+    return decltype;
+}
+
+int token_cmp(struct context *context, struct token *a, struct token *b) {
+    int len = a->len > b->len ? a->len : b->len;
+    return strncmp(&context->tu->source[a->index], &context->tu->source[b->index], len);
+}
+
+int resolve_name(struct context *context, struct token *token, int sc, bool stay_in_block) {
+    struct scope *scope = SCOPE(sc);
+    int original_block = scope->block_depth;
+
+    while (!stay_in_block || scope->block_depth == original_block) {
+        if (token_cmp(context, token, scope->token) == 0) {
+            return scope_id(context, scope);
+        }
+        scope = SCOPE(scope->parent);
+        if (!scope) break;
+    }
+
     return 0;
 }
 
-void type_recur(struct context *context, struct node *node, int block_depth, int scope) {
+int create_scope(struct context *context, int parent, int c_type, struct node *decl) {
+    struct scope *scope = new_scope(context);
+
+    assert(decl->d.name);
+
+    scope->token = decl->d.name;
+    scope->decl = decl;
+    scope->parent = parent;
+    scope->c_type = c_type;
+
+    return scope_id(context, scope);
+}
+
+int type_recur(struct context *context, struct node *node, int block_depth, int parent_scope) {
     switch (node->type) {
     case NODE_DECLARATION: {
         struct node *base_type = NODE(node->decl.type);
         for (int i = 0; i < MAX_DECLARATORS && node->decl.declarators[i]; i += 1) {
             struct node *decl = NODE(node->decl.declarators[i]);
-            find_or_create_type(context, base_type, decl);
+            int type_id = find_or_create_type(context, base_type, decl);
         }
+        break;
+    }
+    case NODE_ROOT: {
+        for (int i = 0; i < MAX_BLOCK_MEMBERS && node->root.children[i]; i++) {
+            type_recur(context, NODE(node->root.children[i]), block_depth + 1, parent_scope);
+        }
+        break;
+    }
+    case NODE_BLOCK: {
+        for (int i = 0; i < MAX_BLOCK_MEMBERS && node->block.children[i]; i++) {
+            type_recur(context, NODE(node->block.children[i]), block_depth + 1, parent_scope);
+        }
+        break;
+    }
+    case NODE_FUNCTION_DEFINITION: {
+        type_recur(context, NODE(node->fun.body), block_depth + 1, parent_scope);
+        break;
     }
     default:
-        return;
     }
+
+    return 0;
 }
