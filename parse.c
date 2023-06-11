@@ -13,6 +13,7 @@ typedef int node_pos;
 
 #define TOKEN(context) (&context->tokens[context->position])
 #define PEEK(context) (&context->tokens[context->position + 1])
+#define PEEKN(context, n) (&context->tokens[context->position + (n)])
 
 struct context {
     struct tu *tu;
@@ -42,6 +43,7 @@ static int parse_assignment_expression(struct context *);
 static int parse_expression(struct context *);
 static int parse_declaration(struct context *);
 static int parse_statement(struct context *);
+static int parse_external_definition(struct context *);
 
 int parse(struct tu *tu) {
     struct context *context = &(struct context){
@@ -58,7 +60,7 @@ int parse(struct tu *tu) {
     int n = 0;
 
     while (more_data(context) && context->errors == 0 && n < MAX_BLOCK_MEMBERS) {
-        root->root.children[n++] = parse_statement(context);
+        root->root.children[n++] = parse_external_definition(context);
     }
 
     tu->nodes = context->ta.nodes;
@@ -254,6 +256,18 @@ static void print_ast_recursive(const char *info, struct tu *tu, int node_id, in
             print_ast_recursive("msg:", tu, node->st_assert.message, level + 1);
         break;
     }
+    case NODE_FUNCTION_DEFINITION: {
+        printf("function:\n");
+        print_ast_recursive("ret:", tu, node->fun.ret_type, level + 1);
+        print_ast_recursive("nam:", tu, node->fun.name, level + 1);
+        print_ast_recursive("bdy:", tu, node->fun.body, level + 1);
+        break;
+    }
+    case NODE_RETURN: {
+        printf("return:\n");
+        print_ast_recursive(nullptr, tu, node->ret.expr, level + 1);
+        break;
+    }
     case NODE_ERROR: {
         printf("error: %.*s\n", token->len, &source[token->index]);
         break;
@@ -265,6 +279,14 @@ static void print_ast_recursive(const char *info, struct tu *tu, int node_id, in
 
 void print_ast(struct tu *tu) {
     print_ast_recursive(nullptr, tu, 0, 0);
+}
+
+static int parse_ident(struct context *context) {
+    if (TOKEN(context)->type != TOKEN_IDENT)
+        return report_error_node(context, "expected an ident, but didn't find it");
+    struct node *node = new(context, NODE_IDENT);
+    pass(context);
+    return id(context, node);
 }
 
 static int parse_primary_expression(struct context *context) {
@@ -578,6 +600,34 @@ static int parse_direct_declarator(struct context *context) {
     return node_id;
 }
 
+static int parse_full_declarator(struct context *context) {
+    int node_id = parse_declarator(context);
+    int expr = 0;
+    if (TOKEN(context)->type == '=') {
+        pass(context);
+        expr = parse_assignment_expression(context);
+    }
+
+    struct node *node = &context->ta.nodes[node_id];
+    switch (node->type) {
+    case NODE_DECLARATOR:
+        node->declarator.initializer = expr;
+        node->declarator.full = true;
+        break;
+    case NODE_ARRAY_DECLARATOR:
+        node->array_declarator.initializer = expr;
+        node->array_declarator.full = true;
+        break;
+    case NODE_FUNCTION_DECLARATOR:
+        node->funcall_declarator.initializer = expr;
+        node->funcall_declarator.full = true;
+        break;
+    default:
+    }
+
+    return node_id;
+}
+
 static int parse_static_assert_declaration(struct context *context) {
     struct node* node = new(context, NODE_STATIC_ASSERT);
     pass(context);
@@ -606,7 +656,7 @@ static int parse_declaration(struct context *context) {
     node->decl.type = parse_type_specifier(context);
     int i = 0;
     while (TOKEN(context)->type != ';' && i < MAX_DECLARATORS) {
-        node->decl.declarators[i++] = parse_declarator(context);
+        node->decl.declarators[i++] = parse_full_declarator(context);
         if (TOKEN(context)->type != ';')
             eat(context, ',');
     }
@@ -615,12 +665,101 @@ static int parse_declaration(struct context *context) {
     return id(context, node);
 }
 
+// parse_other_statements
+
+static int parse_expression_statement(struct context *context) {
+    int expr = parse_expression(context);
+    eat(context, ';');
+    return expr;
+}
+
+static int parse_compound_statement(struct context *context) {
+    struct node *node = new(context, NODE_ROOT);
+    eat(context, '{');
+    int i = 0;
+    while (TOKEN(context)->type != '}') {
+        node->root.children[i++] = parse_statement(context);
+    }
+    eat(context, '}');
+    return id(context, node);
+}
+
+static int parse_label(struct context *context) {
+    struct node *node = new(context, NODE_LABEL);
+    pass(context);
+    eat(context, ':');
+    return id(context, node);
+}
+
+static int parse_return_statement(struct context *context) {
+    struct node *node = new(context, NODE_RETURN);
+    pass(context);
+    if (TOKEN(context)->type != ';') {
+        node->ret.expr = parse_expression(context);
+    }
+    eat(context, ';');
+    return id(context, node);
+}
+
 static int parse_statement(struct context *context) {
-    if (TOKEN(context)->type == TOKEN_STATIC_ASSERT || is_bare_type_specifier(TOKEN(context))) {
+    switch (TOKEN(context)->type) {
+    case '{':
+        return parse_compound_statement(context);
+    case TOKEN_STATIC_ASSERT:
         return parse_declaration(context);
-    } else {
-        int expr = parse_expression(context);
-        eat(context, ';');
-        return expr;
+    case TOKEN_IDENT:
+        if (PEEK(context)->type == ':')
+            return parse_label(context);
+        else if (is_bare_type_specifier(TOKEN(context)))
+            return parse_declaration(context);
+        else
+            return parse_expression_statement(context);
+    case TOKEN_RETURN:
+        return parse_return_statement(context);
+    // case TOKEN_BREAK:
+    //     return parse_break_statement(context);
+    // case TOKEN_IF:
+    //     return parse_if_statement(context);
+    }
+
+    return report_error_node(context, "unknown statement, probably TODO");
+}
+
+static int parse_function_definition(struct context *context) {
+    struct node *node = new(context, NODE_FUNCTION_DEFINITION);
+    node->fun.ret_type = parse_type_specifier(context);
+    node->fun.name = parse_ident(context);
+    eat(context, '(');
+    eat(context, ')');
+    node->fun.body = parse_compound_statement(context);
+    return id(context, node);
+}
+
+static int parse_external_definition(struct context *context) {
+    enum fun_dec {
+        UNKNOWN,
+        FUNCTION,
+        DECLARATION,
+    };
+    enum fun_dec this = UNKNOWN;
+
+    for (int i = 0; PEEKN(context, i)->type != TOKEN_EOF; i += 1) {
+        if (PEEKN(context, i)->type == '{') {
+            this = FUNCTION;
+            break;
+        }
+        if (PEEKN(context, i)->type == '=' || PEEKN(context, i)->type == ';') {
+            this = DECLARATION;
+            break;
+        }
+    }
+
+    switch (this) {
+    case UNKNOWN:
+        return report_error_node(context, "unknown external definition");
+    case DECLARATION:
+        return parse_declaration(context);
+    case FUNCTION:
+        return parse_function_definition(context);
     }
 }

@@ -21,7 +21,17 @@ enum node_type {
     NODE_DECLARATOR,
     NODE_ARRAY_DECLARATOR,
     NODE_FUNCTION_DECLARATOR,
+    NODE_FUNCTION_DEFINITION,
     NODE_STATIC_ASSERT,
+    NODE_LABEL,
+    NODE_RETURN,
+    NODE_IF,
+    NODE_WHILE,
+    NODE_DO,
+    NODE_FOR,
+    NODE_GOTO,
+    NODE_SWITCH,
+    NODE_CASE,
 };
 
 #define MAX_BLOCK_MEMBERS 10
@@ -61,14 +71,20 @@ struct node {
         } function_call;
         struct {
             int inner;
+            int initializer;
+            bool full;
         } declarator;
         struct {
             int inner;
             int args[MAX_FUNCTION_ARGS];
+            int initializer;
+            bool full;
         } funcall_declarator;
         struct {
             int inner;
             int subscript;
+            int initializer;
+            bool full;
         } array_declarator;
         struct {
             int type;
@@ -78,6 +94,14 @@ struct node {
             int expr;
             int message;
         } st_assert;
+        struct {
+            int expr;
+        } ret;
+        struct {
+            int ret_type;
+            int name;
+            int body;
+        } fun;
     };
 };
 
