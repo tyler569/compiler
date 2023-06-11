@@ -50,6 +50,9 @@ struct node {
             int children[MAX_BLOCK_MEMBERS];
         } block;
         struct {
+            int scope_id;
+        } ident;
+        struct {
             int left;
             int right;
         } binop;

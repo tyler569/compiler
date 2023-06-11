@@ -11,6 +11,7 @@
 
 typedef int node_pos;
 
+#define NODE(n) (&context->ta.nodes[(n)])
 #define TOKEN(context) (&context->tokens[context->position])
 #define PEEK(context) (&context->tokens[context->position + 1])
 #define PEEKN(context, n) (&context->tokens[context->position + (n)])
@@ -541,7 +542,8 @@ static int parse_declarator(struct context *context) {
     if (token->type == '*') {
         struct node *node = new(context, NODE_DECLARATOR);
         pass(context);
-        node->unary_op.inner = parse_declarator(context);
+        node->d.inner = parse_declarator(context);
+        node->d.name = NODE(node->d.inner)->d.name;
         return id(context, node);
     } else {
         return parse_direct_declarator(context);
@@ -554,6 +556,7 @@ static int parse_direct_declarator(struct context *context) {
     switch (TOKEN(context)->type) {
     case TOKEN_IDENT: {
         struct node *node = new(context, NODE_DECLARATOR);
+        node->d.name = TOKEN(context);
         pass(context);
         node_id = id(context, node);
         break;
@@ -579,6 +582,7 @@ static int parse_direct_declarator(struct context *context) {
             node = new(context, NODE_ARRAY_DECLARATOR);
             pass(context);
             node->d.inner = node_id;
+            node->d.name = NODE(node->d.inner)->d.name;
             if (TOKEN(context)->type != ']')
                 node->d.arr.subscript = parse_assignment_expression(context);
             eat(context, ']');
@@ -589,6 +593,7 @@ static int parse_direct_declarator(struct context *context) {
             node = new(context, NODE_FUNCTION_DECLARATOR);
             pass(context);
             node->d.inner = node_id;
+            node->d.name = NODE(node->d.inner)->d.name;
             // TODO: args
             eat(context, ')');
             node_id = id(context, node);

@@ -9,9 +9,10 @@
 #include <stdio.h>
 #include <string.h>
 
-#define SCOPE(n) &(context->sca.scopes[(n)])
-#define NODE(n) &(context->root[(n)])
-#define TYPE(n) &(context->tya.types[(n)])
+#define SCOPE(n) (&context->sca.scopes[(n)])
+#define NODE(n) (&context->root[(n)])
+#define TYPE(n) (&context->tya.types[(n)])
+#define TOKEN_STR(tok) (&context->tu->source[(tok)->index])
 
 struct scope {
     struct token *token;
@@ -246,22 +247,20 @@ int token_cmp(struct context *context, struct token *a, struct token *b) {
     return strncmp(&context->tu->source[a->index], &context->tu->source[b->index], len);
 }
 
-int resolve_name(struct context *context, struct token *token, int sc, bool stay_in_block) {
+int resolve_name(struct context *context, struct token *token, int sc) {
     struct scope *scope = SCOPE(sc);
-    int original_block = scope->block_depth;
 
-    while (!stay_in_block || scope->block_depth == original_block) {
+    while (scope) {
         if (token_cmp(context, token, scope->token) == 0) {
             return scope_id(context, scope);
         }
         scope = SCOPE(scope->parent);
-        if (!scope) break;
     }
 
     return 0;
 }
 
-int create_scope(struct context *context, int parent, int c_type, struct node *decl) {
+int create_scope(struct context *context, int parent, int c_type, int depth, struct node *decl) {
     struct scope *scope = new_scope(context);
 
     assert(decl->d.name);
@@ -270,34 +269,84 @@ int create_scope(struct context *context, int parent, int c_type, struct node *d
     scope->decl = decl;
     scope->parent = parent;
     scope->c_type = c_type;
+    scope->block_depth = depth;
 
     return scope_id(context, scope);
 }
 
+bool name_exists(struct context *context, struct token *token, int scope_id) {
+    struct scope *scope = SCOPE(scope_id);
+    int depth = scope->block_depth;
+
+    while (scope->block_depth == depth) {
+        if (token_cmp(context, scope->token, token) == 0)
+            return true;
+
+        scope = SCOPE(scope->parent);
+        if (!scope) break;
+    }
+
+    return false;
+}
+
 int type_recur(struct context *context, struct node *node, int block_depth, int parent_scope) {
+    int scope = parent_scope;
+
     switch (node->type) {
     case NODE_DECLARATION: {
         struct node *base_type = NODE(node->decl.type);
         for (int i = 0; i < MAX_DECLARATORS && node->decl.declarators[i]; i += 1) {
             struct node *decl = NODE(node->decl.declarators[i]);
             int type_id = find_or_create_type(context, base_type, decl);
+            scope = create_scope(context, scope, type_id, block_depth, decl);
         }
-        break;
+        return scope;
     }
-    case NODE_ROOT: {
+    case NODE_ROOT:
         for (int i = 0; i < MAX_BLOCK_MEMBERS && node->root.children[i]; i++) {
-            type_recur(context, NODE(node->root.children[i]), block_depth + 1, parent_scope);
+            int s = type_recur(context, NODE(node->root.children[i]), block_depth, scope);
+            if (s) scope = s;
         }
         break;
-    }
-    case NODE_BLOCK: {
+    case NODE_BLOCK:
         for (int i = 0; i < MAX_BLOCK_MEMBERS && node->block.children[i]; i++) {
-            type_recur(context, NODE(node->block.children[i]), block_depth + 1, parent_scope);
+            int s = type_recur(context, NODE(node->block.children[i]), block_depth + 1, scope);
+            if (s) scope = s;
         }
         break;
-    }
-    case NODE_FUNCTION_DEFINITION: {
-        type_recur(context, NODE(node->fun.body), block_depth + 1, parent_scope);
+    case NODE_FUNCTION_DEFINITION:
+        // TODO: open scope for parameters
+        type_recur(context, NODE(node->fun.body), block_depth + 1, scope);
+        break;
+    case NODE_BINARY_OP:
+        type_recur(context, NODE(node->binop.left), block_depth, scope);
+        type_recur(context, NODE(node->binop.right), block_depth, scope);
+        break;
+    case NODE_UNARY_OP:
+    case NODE_POSTFIX_OP:
+        type_recur(context, NODE(node->unary_op.inner), block_depth, scope);
+        break;
+    case NODE_SUBSCRIPT:
+        type_recur(context, NODE(node->subscript.inner), block_depth, scope);
+        type_recur(context, NODE(node->subscript.subscript), block_depth, scope);
+        break;
+    case NODE_TERNARY:
+        type_recur(context, NODE(node->ternary.condition), block_depth, scope);
+        type_recur(context, NODE(node->ternary.branch_true), block_depth, scope);
+        type_recur(context, NODE(node->ternary.branch_false), block_depth, scope);
+        break;
+    case NODE_RETURN:
+        type_recur(context, NODE(node->ret.expr), block_depth, scope);
+        break;
+    case NODE_IDENT: {
+        int scope_id = resolve_name(context, node->token, scope);
+        if (!scope_id) {
+            report_error(context, "undefined identifier");
+        }
+        fprintf(stderr, "resolving %.*s (line %i) to ", node->token->len, TOKEN_STR(node->token), node->token->line);
+        print_type(context, SCOPE(scope_id)->c_type);
+        fprintf(stderr, " declared on line %i\n", SCOPE(scope_id)->token->line);
+        node->ident.scope_id = scope_id;
         break;
     }
     default:
