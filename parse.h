@@ -73,6 +73,7 @@ struct node {
             int inner;
             int initializer;
             bool full;
+            int scope_id;
         } declarator;
         struct {
             int inner;
@@ -105,42 +106,6 @@ struct node {
     };
 };
 
-enum type_type {
-    TYPE_BASIC,
-    TYPE_POINTER,
-    TYPE_ARRAY,
-    TYPE_STRUCT,
-    TYPE_ENUM,
-};
-
-enum type_flags {
-    T_CONST,
-    T_VOLATILE,
-};
-
-struct type {
-    enum type_type type;
-    enum type_flags flags;
-    struct token *open_paren;
-    struct token *close_paren;
-    struct token *value;
-    union {
-        struct {
-            int child_id;
-        } pointer;
-        struct {
-            int length;
-            int child_id;
-        } array;
-        struct {
-            bool is_union;
-            int *fields;
-        } struct_;
-        struct {
-            int base_id;
-        } enum_;
-    };
-};
 
 struct tu;
 

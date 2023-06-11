@@ -717,6 +717,9 @@ static int parse_statement(struct context *context) {
     //     return parse_if_statement(context);
     }
 
+    if (is_bare_type_specifier(TOKEN(context)))
+        return parse_declaration(context);
+
     return report_error_node(context, "unknown statement, probably TODO");
 }
 
