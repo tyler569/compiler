@@ -41,7 +41,7 @@ struct context {
 };
 
 int type_recur(struct context *context, struct node *node, int block_depth, int parent_scope);
-static int debug_create_type(struct context *context, int parent, enum base_type base, enum type_flags flags);
+static int debug_create_type(struct context *context, int parent, enum layer_type base, enum type_flags flags);
 static void print_type(struct context *context, int type_id);
 
 static struct type *new_type(struct context *context);
@@ -53,16 +53,11 @@ int type(struct tu *tu) {
         .root = tu->nodes,
     };
 
-    // discard index 0 so it can be used for "none"
+    // discard index 0, so it can be used for "none"
     (void) new_type(context);
     (void) new_scope(context);
 
     type_recur(context, context->root, 0, 0);
-
-    for (int i = 0; i < context->tya.len; i += 1) {
-        print_type(context, i);
-        putc('\n', stderr);
-    }
 
     return context->errors;
 }
@@ -118,13 +113,17 @@ int type_id(struct context *context, struct type *type) {
 static void print_type(struct context *context, int type_id) {
     struct type *type = TYPE(type_id);
 
-    if (type->inner) {
-        print_type(context, type->inner);
-        fputc(' ', stderr);
-    }
+#define FLAG(flag_id, flag_name) if (type->flags & (flag_id)) do { fputc(' ', stderr); fputs((flag_name), stderr); } while (0)
+    FLAG(TF_ATOMIC, "atomic");
+    FLAG(TF_CONST, "const");
+    FLAG(TF_VOLATILE, "volatile");
+    FLAG(TF_RESTRICT, "restrict");
+    FLAG(TF_INLINE, "inline");
+    FLAG(TF_NORETURN, "noreturn");
+#undef FLAG
 
 #define CASE(type_id, type_name) case (type_id): fputs((type_name), stderr); break
-    switch (type->base) {
+    switch (type->layer) {
     CASE(TYPE_VOID, "void");
     CASE(TYPE_SIGNED_CHAR, "char");
     CASE(TYPE_SIGNED_SHORT, "short");
@@ -143,33 +142,29 @@ static void print_type(struct context *context, int type_id) {
     CASE(TYPE_COMPLEX_FLOAT, "complex float");
     CASE(TYPE_COMPLEX_DOUBLE, "complex double");
     CASE(TYPE_COMPLEX_LONG_DOUBLE, "complex long double");
-    CASE(TYPE_POINTER, "*");
-    CASE(TYPE_ARRAY, "[]");
-    CASE(TYPE_FUNCTION, "()");
+    CASE(TYPE_POINTER, "pointer to");
+    CASE(TYPE_ARRAY, "array [] of");
+    CASE(TYPE_FUNCTION, "function () returning");
     CASE(TYPE_ENUM, "(enum)");
     CASE(TYPE_STRUCT, "(struct)");
     CASE(TYPE_UNION, "(union)");
     }
 #undef CASE
 
-#define FLAG(flag_id, flag_name) if (type->flags & (flag_id)) do { fputc(' ', stderr); fputs((flag_name), stderr); } while (0)
-    FLAG(TF_ATOMIC, "atomic");
-    FLAG(TF_CONST, "const");
-    FLAG(TF_VOLATILE, "volatile");
-    FLAG(TF_RESTRICT, "restrict");
-    FLAG(TF_INLINE, "inline");
-    FLAG(TF_NORETURN, "noreturn");
-#undef FLAG
-
     if (type->flags & (0xf << TF_ALIGNAS_BIT)) {
         fprintf(stderr, " alignas(%i)", 1 << ((type->flags >> TF_ALIGNAS_BIT) & 0xf));
     }
+
+    if (type->inner) {
+        fputc(' ', stderr);
+        print_type(context, type->inner);
+    }
 }
 
-static int debug_create_type(struct context *context, int parent, enum base_type base, enum type_flags flags) {
+static int debug_create_type(struct context *context, int parent, enum layer_type base, enum type_flags flags) {
     struct type *type = new_type(context);
     type->inner = parent;
-    type->base = base;
+    type->layer = base;
     type->flags = flags;
     return type_id(context, type);
 }
@@ -185,15 +180,15 @@ static const char *base_type_ids[] = {
     [TYPE_BOOL] = "bool",
 };
 
-int find_or_create(struct context *context, int inner, enum base_type base, enum type_flags flags) {
+int find_or_create(struct context *context, int inner, enum layer_type base, enum type_flags flags) {
     for (int i = 0; i < context->tya.len; i += 1) {
         struct type *type = TYPE(i);
-        if (type->inner == inner && type->base == base && type->flags == flags)
+        if (type->inner == inner && type->layer == base && type->flags == flags)
             return i;
     }
 
     struct type *ty = new_type(context);
-    ty->base = base;
+    ty->layer = base;
     ty->flags = flags;
     ty->inner = inner;
 
@@ -202,21 +197,20 @@ int find_or_create(struct context *context, int inner, enum base_type base, enum
 
 int find_or_create_type_inner(struct context *context, int typ, struct node *decl) {
     switch (decl->type) {
-    case NODE_DECLARATOR: {
-        if (decl->d.inner) {
-            int inner = find_or_create_type_inner(context, typ, NODE(decl->d.inner));
-            return find_or_create(context, inner, TYPE_POINTER, 0);
-        } else {
+    case NODE_DECLARATOR:
+        if (!decl->d.inner) {
             return typ;
+        } else {
+            int layer = find_or_create(context, typ, TYPE_POINTER, 0);
+            return find_or_create_type_inner(context, layer, NODE(decl->d.inner));
         }
-    }
     case NODE_FUNCTION_DECLARATOR: {
-        int inner = find_or_create_type_inner(context, typ, NODE(decl->d.inner));
-        return find_or_create(context, inner, TYPE_FUNCTION, 0);
+        int layer = find_or_create(context, typ, TYPE_FUNCTION, 0);
+        return find_or_create_type_inner(context, layer, NODE(decl->d.inner));
     }
     case NODE_ARRAY_DECLARATOR: {
-        int inner = find_or_create_type_inner(context, typ, NODE(decl->d.inner));
-        return find_or_create(context, inner, TYPE_FUNCTION, 0);
+        int layer = find_or_create(context, typ, TYPE_ARRAY, 0);
+        return find_or_create_type_inner(context, layer, NODE(decl->d.inner));
     }
     default:
         report_error(context, "invalid declarator type");
@@ -225,7 +219,7 @@ int find_or_create_type_inner(struct context *context, int typ, struct node *dec
 }
 
 int find_or_create_type(struct context *context, struct node *type, struct node *decl) {
-    enum base_type b_type = -1;
+    enum layer_type b_type = -1;
     for (int i = 0; i < ARRAY_LEN(base_type_ids); i += 1) {
         if (!base_type_ids[i]) continue;
         if (strncmp(base_type_ids[i], &context->tu->source[type->token->index], type->token->len) == 0) {
@@ -270,6 +264,10 @@ int create_scope(struct context *context, int parent, int c_type, int depth, str
     scope->parent = parent;
     scope->c_type = c_type;
     scope->block_depth = depth;
+
+    fprintf(stderr, "%.*s has type ", scope->token->len, TOKEN_STR(scope->token));
+    print_type(context, c_type);
+    fprintf(stderr, "\n");
 
     return scope_id(context, scope);
 }

@@ -231,12 +231,20 @@ static void print_ast_recursive(const char *info, struct tu *tu, int node_id, in
         printf("type: %.*s\n", token->len, &source[token->index]);
         break;
     }
-    case NODE_DECLARATOR: {
+    case NODE_DECLARATOR:
+    case NODE_FUNCTION_DECLARATOR:
+    case NODE_ARRAY_DECLARATOR: {
         printf("d: ");
         struct node *n = node;
         while (true) {
             token = n->token;
-            printf("%.*s", token->len, &source[token->index]);
+            if (n->type == NODE_DECLARATOR) {
+                printf("%.*s", token->len, &source[token->index]);
+            } else if (n->type == NODE_FUNCTION_DECLARATOR) {
+                printf("()");
+            } else if (n->type == NODE_ARRAY_DECLARATOR) {
+                printf("[]");
+            }
 
             if (!n->d.inner) {
                 printf("\n");
@@ -247,20 +255,6 @@ static void print_ast_recursive(const char *info, struct tu *tu, int node_id, in
         }
         if (node->d.initializer)
             RECUR_INFO("ini:", node->d.initializer);
-        break;
-    }
-    case NODE_FUNCTION_DECLARATOR: {
-        printf("d.func:\n");
-        RECUR(node->d.inner);
-        for (int i = 0; i < MAX_FUNCTION_ARGS && node->d.fun.args[i]; i += 1)
-            RECUR_INFO("arg:", node->d.fun.args[i]);
-        break;
-    }
-    case NODE_ARRAY_DECLARATOR: {
-        printf("d.array:\n");
-        RECUR_INFO("arr:", node->d.inner);
-        if (node->d.arr.subscript)
-            RECUR_INFO("sub:", node->d.arr.subscript);
         break;
     }
     case NODE_STATIC_ASSERT: {
@@ -564,7 +558,7 @@ static int parse_declarator(struct context *context) {
 }
 
 static int parse_direct_declarator(struct context *context) {
-    int node_id = -1;
+    int node_id;
 
     switch (TOKEN(context)->type) {
     case TOKEN_IDENT: {
@@ -580,9 +574,7 @@ static int parse_direct_declarator(struct context *context) {
         eat(context, ')');
         break;
     }
-    }
-
-    if (node_id == -1) {
+    default:
         return report_error_node(context, "unable to parse d");
     }
 
@@ -682,7 +674,10 @@ static int parse_declaration(struct context *context) {
 static int parse_single_declaration(struct context *context) {
     struct node *node = new(context, NODE_DECLARATION);
     node->decl.type = parse_type_specifier(context);
-    node->decl.declarators[0] = parse_full_declarator(context);
+
+    if (TOKEN(context)->type == '*' || TOKEN(context)->type == '(' || TOKEN(context)->type == TOKEN_IDENT)
+        node->decl.declarators[0] = parse_full_declarator(context);
+
     return id(context, node);
 }
 

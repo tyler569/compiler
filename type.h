@@ -2,7 +2,7 @@
 #ifndef COMPILER_TYPE_H
 #define COMPILER_TYPE_H
 
-enum base_type {
+enum layer_type {
     TYPE_VOID,
     TYPE_SIGNED_CHAR,
     TYPE_SIGNED_SHORT,
@@ -28,6 +28,9 @@ enum base_type {
     TYPE_ENUM,
     TYPE_STRUCT,
     TYPE_UNION,
+
+    TYPE_FIELD,
+    TYPE_ARG,
 };
 
 enum type_flags {
@@ -38,7 +41,7 @@ enum type_flags {
     TF_INLINE = (1 << 4),
     TF_NORETURN = (1 << 5),
     // 4 bits representing log2(alignas value)
-    // alignas(32) is represented as (5 << TF_ALIGNAS_0)
+    // alignas(32) is represented as (5 << TF_ALIGNAS_BIT)
     TF_ALIGNAS_0 = (1 << 6),
     TF_ALIGNAS_1 = (1 << 7),
     TF_ALIGNAS_2 = (1 << 8),
@@ -48,8 +51,22 @@ enum type_flags {
 #define TF_ALIGNAS_BIT 6
 
 struct type {
-    enum base_type base;
+    enum layer_type layer;
     enum type_flags flags;
+
+    union {
+        struct {
+            struct token *name;
+            int bits;
+            int next;
+        } field;
+        struct {
+            struct token *name;
+        } enum_;
+        struct {
+            int next;
+        } function_arg;
+    };
 
     int inner;
 };

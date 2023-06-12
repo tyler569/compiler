@@ -9,8 +9,8 @@
 #include "type.h"
 
 int main() {
-    const char *source = "int y = 0, *x = &y;\n"
-                         "int foo(int bar, int *baz) { int x = 10; return y << 3; }";
+    // const char *source = "int y = 0, *x = &y;\n"
+    //                      "int foo(int bar, int *baz) { int x = 10; return y << 3; }";
     // const char *source = "a, b + 2 & c++, condition ? true : false";
     // const char *source = "a = b, c |= d, 1 ? 2 : 3, -10, *a = b++, *a++, (*a)++, (2+2) * 12";
     // const char *source = "'\\\\', '\\'', '\\n', '\\t', -1, 2.2";
@@ -19,6 +19,8 @@ int main() {
     // const char *source = "int a, *b, c[], d(), *e(), (*f)(), g[100];\n"
     //                      "static_assert(x == 10, \"message\");\n"
     //                      "a += *b;";
+    // const char *source = "int foo(int, char, signed);";
+    const char *source = "int (*foo)(); int (*bar())();";
 
     struct tu *tu = &(struct tu){
         .source = source,
@@ -30,6 +32,5 @@ int main() {
     tokenize(tu);
     parse(tu);
     print_ast(tu);
-
     type(tu);
 }
