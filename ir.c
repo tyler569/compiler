@@ -112,14 +112,14 @@ struct ir_reg next(struct context *context) {
     return (struct ir_reg){.index = context->next_reg++};
 }
 
-struct ir_reg emit_one_node(struct context *context, struct node *node);
+struct ir_reg emit_one_node(struct context *context, struct node *node, bool write);
 
 int emit(struct tu *tu) {
     struct context *context = &(struct context){
         .tu = tu,
     };
 
-    emit_one_node(context, tu->nodes);
+    emit_one_node(context, tu->nodes, false);
 
     tu->ir = context->ia.instrs;
     tu->ir_len = context->ia.len;
@@ -127,7 +127,7 @@ int emit(struct tu *tu) {
     return context->errors;
 }
 
-struct ir_reg emit_one_node(struct context *context, struct node *node) {
+struct ir_reg emit_one_node(struct context *context, struct node *node, bool write) {
     switch (node->type) {
     case NODE_INT_LITERAL: {
         ir *i = new(context);
@@ -144,16 +144,17 @@ struct ir_reg emit_one_node(struct context *context, struct node *node) {
         return i->r[0];
     }
     case NODE_IDENT: {
+        if (write) SCOPE(node->ident.scope_id)->ir_index += 1;
         struct ir_reg reg = {
             .name = node->token,
-            .index = SCOPE(node->ident.scope_id)->ir_index++,
+            .index = SCOPE(node->ident.scope_id)->ir_index,
         };
         return reg;
     }
     case NODE_BINARY_OP: {
         if (node->token->type == '=') {
-            struct ir_reg out = emit_one_node(context, NODE(node->binop.left));
-            struct ir_reg in = emit_one_node(context, NODE(node->binop.right));
+            struct ir_reg out = emit_one_node(context, NODE(node->binop.left), true);
+            struct ir_reg in = emit_one_node(context, NODE(node->binop.right), false);
 
             ir *i = new(context);
             i->op = MOVE;
@@ -162,11 +163,11 @@ struct ir_reg emit_one_node(struct context *context, struct node *node) {
             return i->r[0];
         }
         struct ir_reg result = next(context);
-        struct ir_reg lhs = emit_one_node(context, NODE(node->binop.left));
-        struct ir_reg rhs = emit_one_node(context, NODE(node->binop.right));
+        struct ir_reg lhs = emit_one_node(context, NODE(node->binop.left), false);
+        struct ir_reg rhs = emit_one_node(context, NODE(node->binop.right), false);
 
         ir *i = new(context);
-        i->r[0] = next(context);
+        i->r[0] = result;
         switch (node->token->type) {
         case '+': i->op = ADD; break;
         case '-': i->op = SUB; break;
@@ -186,7 +187,7 @@ struct ir_reg emit_one_node(struct context *context, struct node *node) {
         return i->r[0];
     }
     case NODE_RETURN: {
-        struct ir_reg rv = emit_one_node(context, NODE(node->ret.expr));
+        struct ir_reg rv = emit_one_node(context, NODE(node->ret.expr), false);
         ir *i = new(context);
         i->op = RET;
         i->r[0] = rv;
@@ -194,15 +195,15 @@ struct ir_reg emit_one_node(struct context *context, struct node *node) {
     }
     case NODE_ROOT:
         for (int i = 0; i < MAX_BLOCK_MEMBERS && node->root.children[i]; i += 1) {
-            emit_one_node(context, NODE(node->root.children[i]));
+            emit_one_node(context, NODE(node->root.children[i]), false);
         }
         break;
     case NODE_FUNCTION_DEFINITION:
-        emit_one_node(context, NODE(node->fun.body));
+        emit_one_node(context, NODE(node->fun.body), false);
         break;
     case NODE_BLOCK:
         for (int i = 0; i < MAX_BLOCK_MEMBERS && node->block.children[i]; i += 1) {
-            emit_one_node(context, NODE(node->block.children[i]));
+            emit_one_node(context, NODE(node->block.children[i]), false);
         }
         break;
     default:
