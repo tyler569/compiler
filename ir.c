@@ -38,15 +38,19 @@ void print_reg(struct tu *tu, struct ir_instr *i, int r) {
 
 void print_ir_instr(struct tu *tu, struct ir_instr *i) {
     switch (i->op) {
-    case LABEL: fprintf(stderr, "LABEL ?\n"); break;
-    case DATA: fprintf(stderr, "DATA ?\n"); break;
-
 #define CASE3(instr, name) case (instr): \
     print_reg(tu, i, 0); \
     fprintf(stderr, " := " name " "); \
     print_reg(tu, i, 1); \
     fputs(", ", stderr); \
     print_reg(tu, i, 2); \
+    fputc('\n', stderr); \
+    break
+
+#define CASE2(instr, name) case (instr): \
+    print_reg(tu, i, 0); \
+    fprintf(stderr, " := " name " "); \
+    print_reg(tu, i, 1); \
     fputc('\n', stderr); \
     break
 
@@ -60,6 +64,10 @@ void print_ir_instr(struct tu *tu, struct ir_instr *i) {
     CASE3(XOR, "xor");
     CASE3(SHR, "shr");
     CASE3(SHL, "shl");
+
+    CASE2(NEG, "neg");
+    CASE2(INV, "inv");
+    CASE2(NOT, "not");
 
     case MOVE:
         print_reg(tu, i, 0);
@@ -79,6 +87,29 @@ void print_ir_instr(struct tu *tu, struct ir_instr *i) {
         fputc('\n', stderr);
         break;
 
+    case LABEL:
+        fprintf(stderr, "label: %s:\n", i->r[0].iname);
+        break;
+
+    case JMP:
+        fprintf(stderr, "jmp %s\n", i->r[0].iname);
+        break;
+
+    case JZ:
+        fprintf(stderr, "jz %s, ", i->r[0].iname);
+        print_reg(tu, i, 1);
+        fprintf(stderr, "\n");
+        break;
+
+    case PHI:
+        print_reg(tu, i, 0);
+        fprintf(stderr, " := phi(");
+        print_reg(tu, i, 1);
+        fprintf(stderr, ", ");
+        print_reg(tu, i, 2);
+        fprintf(stderr, ")\n");
+        break;
+
     default:
         fprintf(stderr, "no print for ir %i\n", i->op);
 
@@ -87,7 +118,7 @@ void print_ir_instr(struct tu *tu, struct ir_instr *i) {
 }
 
 void report_error(struct context *context, const char *message) {
-    fprintf(stderr, "%s\n", message);
+    fprintf(stderr, "ir error: %s\n", message);
     context->errors += 1;
     exit(1);
 }
@@ -153,8 +184,8 @@ struct ir_reg emit_one_node(struct context *context, struct node *node, bool wri
     }
     case NODE_BINARY_OP: {
         if (node->token->type == '=') {
-            struct ir_reg out = emit_one_node(context, NODE(node->binop.left), true);
             struct ir_reg in = emit_one_node(context, NODE(node->binop.right), false);
+            struct ir_reg out = emit_one_node(context, NODE(node->binop.left), true);
 
             ir *i = new(context);
             i->op = MOVE;
@@ -162,12 +193,11 @@ struct ir_reg emit_one_node(struct context *context, struct node *node, bool wri
             i->r[1] = in;
             return i->r[0];
         }
-        struct ir_reg result = next(context);
         struct ir_reg lhs = emit_one_node(context, NODE(node->binop.left), false);
         struct ir_reg rhs = emit_one_node(context, NODE(node->binop.right), false);
 
         ir *i = new(context);
-        i->r[0] = result;
+        i->r[0] = next(context);
         switch (node->token->type) {
         case '+': i->op = ADD; break;
         case '-': i->op = SUB; break;
@@ -184,6 +214,75 @@ struct ir_reg emit_one_node(struct context *context, struct node *node, bool wri
         }
         i->r[1] = lhs;
         i->r[2] = rhs;
+        return i->r[0];
+    }
+    case NODE_UNARY_OP: {
+        struct ir_reg inner = emit_one_node(context, NODE(node->unary_op.inner), false);
+        if (node->token->type == '+') return inner;
+
+        ir *i = new(context);
+        i->r[0] = next(context);
+        i->r[1] = inner;
+        switch (node->token->type) {
+        case '-': i->op = NEG; break;
+        case '~': i->op = INV; break;
+        case '!': i->op = NOT; break;
+        case '*':
+        case '&':
+            report_error(context, "pointers not yet supported");
+            return i->r[0];
+        default:
+            report_error(context, "unknown unary operator");
+            return i->r[0];
+        }
+        return i->r[0];
+    }
+    case NODE_TERNARY: {
+        struct ir_reg cond = emit_one_node(context, NODE(node->ternary.condition), false);
+        struct ir_reg cnd_false = (struct ir_reg) { .iname = "cnd.false" };
+        struct ir_reg cnd_end = (struct ir_reg) { .iname = "cnd.end" };
+        {
+            ir *i = new(context);
+            i->op = JZ;
+            i->r[0] = cnd_false;
+            i->r[1] = cond;
+        }
+        struct ir_reg bt = emit_one_node(context, NODE(node->ternary.branch_true), false);
+        {
+            ir *i = new(context);
+            i->op = MOVE;
+            i->r[0] = next(context);
+            i->r[1] = bt;
+            bt = i->r[0];
+        }
+        {
+            ir *i = new(context);
+            i->op = JMP;
+            i->r[0] = cnd_end;
+        }
+        {
+            ir *i = new(context);
+            i->op = LABEL;
+            i->r[0] = cnd_false;
+        }
+        struct ir_reg bf = emit_one_node(context, NODE(node->ternary.branch_false), false);
+        {
+            ir *i = new(context);
+            i->op = MOVE;
+            i->r[0] = next(context);
+            i->r[1] = bf;
+            bf = i->r[0];
+        }
+        {
+            ir *i = new(context);
+            i->op = LABEL;
+            i->r[0] = cnd_end;
+        }
+        ir *i = new(context);
+        i->op = PHI;
+        i->r[0] = next(context);
+        i->r[1] = bt;
+        i->r[2] = bf;
         return i->r[0];
     }
     case NODE_RETURN: {
