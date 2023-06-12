@@ -14,14 +14,6 @@
 #define TYPE(n) (&context->tya.types[(n)])
 #define TOKEN_STR(tok) (&context->tu->source[(tok)->index])
 
-struct scope {
-    struct token *token;
-    struct node *decl;
-    int c_type;
-    int parent;
-    int block_depth;
-};
-
 struct context {
     struct tu *tu;
     struct node *root;
@@ -58,6 +50,8 @@ int type(struct tu *tu) {
     (void) new_scope(context);
 
     type_recur(context, context->root, 0, 0);
+    tu->scopes = context->sca.scopes;
+    tu->scopes_len = context->sca.len;
 
     return context->errors;
 }

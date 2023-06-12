@@ -6,6 +6,8 @@
 
 struct token;
 struct node;
+struct ir_instr;
+struct scope;
 
 struct tu {
     const char *filename;
@@ -18,6 +20,12 @@ struct tu {
 
     struct node *nodes;
     size_t nodes_len;
+
+    struct scope *scopes;
+    size_t scopes_len;
+
+    struct ir_instr *ir;
+    size_t ir_len;
 
     struct {
         int capacity;

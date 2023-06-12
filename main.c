@@ -7,6 +7,7 @@
 #include "parse.h"
 #include "tu.h"
 #include "type.h"
+#include "ir.h"
 
 int main() {
     // const char *source = "int y = 0, *x = &y;\n"
@@ -24,7 +25,14 @@ int main() {
     //                      "a += *b;";
     // const char *source = "int foo(int, char, signed);";
     // const char *source = "int (*foo)(); int (*bar())();";
-    const char *source = "int main(int a, int b) {\na = b; int c = a; int d = c; return 0; }\nint a = main;";
+    // const char *source = "int main(int a, int b) {\na = b; int c = a; int d = c; return 0; }\nint a = main;";
+    const char *source = "int main() {\n"
+                         "    int a, b;\n"
+                         "    a = 1;\n"
+                         "    b = 2;\n"
+                         "    a = 2 + 4 * 6 + b;\n"
+                         "    return a + b;\n"
+                         "}\n";
 
     struct tu *tu = &(struct tu){
         .source = source,
@@ -48,4 +56,11 @@ int main() {
     parse(tu);
     print_ast(tu);
     type(tu);
+
+    fprintf(stderr, "\n");
+
+    emit(tu);
+    for (int i = 0; i < tu->ir_len; i += 1) {
+        print_ir_instr(tu, &tu->ir[i]);
+    }
 }

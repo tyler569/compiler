@@ -77,6 +77,15 @@ struct type {
     int inner;
 };
 
+struct scope {
+    struct token *token;
+    struct node *decl;
+    int c_type;
+    int parent;
+    int block_depth;
+    int ir_index;
+};
+
 struct tu;
 
 int type(struct tu *tu);
