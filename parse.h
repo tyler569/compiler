@@ -102,8 +102,7 @@ struct node {
             int expr;
         } ret;
         struct {
-            int ret_type;
-            int name;
+            int decl;
             int body;
         } fun;
         struct {

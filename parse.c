@@ -232,15 +232,28 @@ static void print_ast_recursive(const char *info, struct tu *tu, int node_id, in
         break;
     }
     case NODE_DECLARATOR: {
-        printf("d: %.*s\n", token->len, &source[token->index]);
-        if (node->d.inner) {
-            RECUR(node->d.inner);
+        printf("d: ");
+        struct node *n = node;
+        while (true) {
+            token = n->token;
+            printf("%.*s", token->len, &source[token->index]);
+
+            if (!n->d.inner) {
+                printf("\n");
+                break;
+            }
+            printf(" -> ");
+            n = tu_node(tu, n->d.inner);
         }
+        if (node->d.initializer)
+            RECUR_INFO("ini:", node->d.initializer);
         break;
     }
     case NODE_FUNCTION_DECLARATOR: {
         printf("d.func:\n");
         RECUR(node->d.inner);
+        for (int i = 0; i < MAX_FUNCTION_ARGS && node->d.fun.args[i]; i += 1)
+            RECUR_INFO("arg:", node->d.fun.args[i]);
         break;
     }
     case NODE_ARRAY_DECLARATOR: {
@@ -259,8 +272,7 @@ static void print_ast_recursive(const char *info, struct tu *tu, int node_id, in
     }
     case NODE_FUNCTION_DEFINITION: {
         printf("function:\n");
-        RECUR_INFO("ret:", node->fun.ret_type);
-        RECUR_INFO("nam:", node->fun.name);
+        RECUR_INFO("typ:", node->fun.decl);
         RECUR_INFO("bdy:", node->fun.body);
         break;
     }
@@ -535,6 +547,7 @@ static int parse_type_specifier_qualifier_list(struct context *context) {
 }
 
 static int parse_direct_declarator(struct context *);
+static int parse_single_declaration(struct context *);
 
 static int parse_declarator(struct context *context) {
     struct token *token = TOKEN(context);
@@ -591,10 +604,15 @@ static int parse_direct_declarator(struct context *context) {
         }
         case '(': {
             node = new(context, NODE_FUNCTION_DECLARATOR);
-            pass(context);
+            eat(context, '(');
             node->d.inner = node_id;
             node->d.name = NODE(node->d.inner)->d.name;
             // TODO: args
+            int i = 0;
+            while (TOKEN(context)->type != ')' && i < MAX_FUNCTION_ARGS) {
+                node->d.fun.args[i++] = parse_single_declaration(context);
+                if (TOKEN(context)->type != ')') eat(context, ',');
+            }
             eat(context, ')');
             node_id = id(context, node);
             break;
@@ -616,15 +634,8 @@ static int parse_full_declarator(struct context *context) {
     }
 
     struct node *node = &context->ta.nodes[node_id];
-    switch (node->type) {
-    case NODE_DECLARATOR:
-    case NODE_ARRAY_DECLARATOR:
-    case NODE_FUNCTION_DECLARATOR:
-        node->d.initializer = expr;
-        node->d.full = true;
-        break;
-    default:
-    }
+    node->d.initializer = expr;
+    node->d.full = true;
 
     return node_id;
 }
@@ -663,6 +674,15 @@ static int parse_declaration(struct context *context) {
     }
     eat(context, ';');
 
+    return id(context, node);
+}
+
+// a "single declaration" contains 0 or 1 declarators and doesn't necessarily end with a ;
+// this is for function definitions and parameters.
+static int parse_single_declaration(struct context *context) {
+    struct node *node = new(context, NODE_DECLARATION);
+    node->decl.type = parse_type_specifier(context);
+    node->decl.declarators[0] = parse_full_declarator(context);
     return id(context, node);
 }
 
@@ -731,10 +751,7 @@ static int parse_statement(struct context *context) {
 
 static int parse_function_definition(struct context *context) {
     struct node *node = new(context, NODE_FUNCTION_DEFINITION);
-    node->fun.ret_type = parse_type_specifier(context);
-    node->fun.name = parse_ident(context);
-    eat(context, '(');
-    eat(context, ')');
+    node->fun.decl = parse_single_declaration(context);
     node->fun.body = parse_compound_statement(context);
     return id(context, node);
 }
@@ -752,7 +769,9 @@ static int parse_external_definition(struct context *context) {
             this = FUNCTION;
             break;
         }
-        if (PEEKN(context, i)->type == '=' || PEEKN(context, i)->type == ';') {
+        if (PEEKN(context, i)->type == '=' ||
+                PEEKN(context, i)->type == ';' ||
+                PEEKN(context, i)->type == TOKEN_STATIC_ASSERT) {
             this = DECLARATION;
             break;
         }

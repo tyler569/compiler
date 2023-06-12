@@ -11,6 +11,8 @@ static const char *safe_find_right(const char *base, const char *ptr, char c) {
 }
 
 void print_line(const char *source, int position, int line_number) {
+    if (line_number == 0) return;
+
     const char *start = safe_find_right(source, source + position, '\n');
     if (*start == '\n') start += 1;
     const char *end = strchr(start + 1, '\n');
@@ -21,6 +23,8 @@ void print_line(const char *source, int position, int line_number) {
 }
 
 void print_and_highlight(const char *source, struct token *token) {
+    if (token->line == 0) return;
+
     print_line(source, token->index, token->line);
     for (int i = 0; i < token->column + 4; i += 1) fputc(' ', stderr);
     fputc('^', stderr);

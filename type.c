@@ -299,6 +299,9 @@ int type_recur(struct context *context, struct node *node, int block_depth, int 
             struct node *decl = NODE(node->decl.declarators[i]);
             int type_id = find_or_create_type(context, base_type, decl);
             scope = create_scope(context, scope, type_id, block_depth, decl);
+
+            if (decl->d.initializer)
+                type_recur(context, NODE(node->d.initializer), block_depth, scope);
         }
         return scope;
     }
