@@ -66,6 +66,12 @@ struct type {
         struct {
             int next;
         } function_arg;
+        struct {
+            int first_arg;
+        } function;
+        struct {
+            int first_field;
+        } struct_;
     };
 
     int inner;

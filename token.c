@@ -57,6 +57,7 @@ int tokenize(struct tu *tu) {
 
     while (more_data(state)) {
         skip_whitespace(state);
+        if (!more_data(state)) break;
 
         char c = CHAR(state);
         if (isalpha(c)) {

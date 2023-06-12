@@ -9,8 +9,11 @@
 #include "type.h"
 
 int main() {
-    // const char *source = "int y = 0, *x = &y;\n"
-    //                      "int foo(int bar, int *baz) { int x = 10; return y << 3; }";
+    const char *source = "int y = 0, *x = &y;\n"
+                         "int foo(int bar, int *baz) {\n"
+                         "    int x = 10;\n"
+                         "    return y << 3;\n"
+                         "}\n";
     // const char *source = "a, b + 2 & c++, condition ? true : false";
     // const char *source = "a = b, c |= d, 1 ? 2 : 3, -10, *a = b++, *a++, (*a)++, (2+2) * 12";
     // const char *source = "'\\\\', '\\'', '\\n', '\\t', -1, 2.2";
@@ -20,7 +23,7 @@ int main() {
     //                      "static_assert(x == 10, \"message\");\n"
     //                      "a += *b;";
     // const char *source = "int foo(int, char, signed);";
-    const char *source = "int (*foo)(); int (*bar())();";
+    // const char *source = "int (*foo)(); int (*bar())();";
 
     struct tu *tu = &(struct tu){
         .source = source,
@@ -30,6 +33,17 @@ int main() {
     };
 
     tokenize(tu);
+
+    // for (int i = 0; i < tu->tokens_len; i += 1) {
+    //     struct token *t = &tu->tokens[i];
+    //
+    //     fputs("token", stdout);
+    //     print_token_type(t);
+    //     printf("@(%i:%i) '%.*s'\n", t->line, t->column, t->len, &source[t->index]);
+    //
+    //     print_and_highlight(tu->source, t);
+    // }
+
     parse(tu);
     print_ast(tu);
     type(tu);
