@@ -9,11 +9,11 @@
 #include "type.h"
 
 int main() {
-    const char *source = "int y = 0, *x = &y;\n"
-                         "int foo(int bar, int *baz) {\n"
-                         "    int x = 10;\n"
-                         "    return y << 3;\n"
-                         "}\n";
+    // const char *source = "int y = 0, *x = &y;\n"
+    //                      "int foo(int bar, int *baz) {\n"
+    //                      "    int x = 10;\n"
+    //                      "    return y << 3;\n"
+    //                      "}\n";
     // const char *source = "a, b + 2 & c++, condition ? true : false";
     // const char *source = "a = b, c |= d, 1 ? 2 : 3, -10, *a = b++, *a++, (*a)++, (2+2) * 12";
     // const char *source = "'\\\\', '\\'', '\\n', '\\t', -1, 2.2";
@@ -24,6 +24,7 @@ int main() {
     //                      "a += *b;";
     // const char *source = "int foo(int, char, signed);";
     // const char *source = "int (*foo)(); int (*bar())();";
+    const char *source = "int main(int a, int b) {\na = b; int c = a; int d = c; return 0; }\nint a = main;";
 
     struct tu *tu = &(struct tu){
         .source = source,

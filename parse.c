@@ -56,7 +56,7 @@ int parse(struct tu *tu) {
     struct node *root = new(context, NODE_ROOT);
     memset(root, 0, sizeof(*root));
 
-    root->token = &(struct token){};
+    root->token = tu->tokens;
     root->type = NODE_ROOT;
     int n = 0;
 
