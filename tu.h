@@ -36,10 +36,24 @@ struct tu {
     bool abort;
 };
 
-struct token *tu_token(struct tu *, int token_id);
-size_t tu_token_len(struct tu *, int token_id);
-const char *tu_token_str(struct tu *, int token_id);
+#include "token.h"
+#include "parse.h"
 
-struct node *tu_node(struct tu *, int node_id);
+
+static inline struct token *tu_token(struct tu *tu, int token_id) {
+    return &tu->tokens[token_id];
+}
+
+static inline size_t tu_token_len(struct tu *tu, int token_id) {
+    return tu->tokens[token_id].len;
+}
+
+static inline const char *tu_token_str(struct tu *tu, int token_id) {
+    return &tu->source[tu->tokens[token_id].len];
+}
+
+static inline struct node *tu_node(struct tu *tu, int node_id) {
+    return &tu->nodes[node_id];
+}
 
 #endif //COMPILER_TU_H

@@ -6,6 +6,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdarg.h>
 
 #define NODE(n) (&context->tu->nodes[(n)])
 #define SCOPE(n) (&context->tu->scopes[(n)])
@@ -14,6 +15,7 @@ struct context {
     struct tu *tu;
     int blocks[MAX_BLOCK_MEMBERS];
     short next_reg;
+    short next_condition;
     int errors;
 
     struct {
@@ -121,6 +123,15 @@ void report_error(struct context *context, const char *message) {
     fprintf(stderr, "ir error: %s\n", message);
     context->errors += 1;
     exit(1);
+}
+
+const char *tprintf(struct context *context, const char *format, ...) {
+    char *out;
+    va_list args;
+    va_start(args, format);
+    vasprintf(&out, format, args);
+    va_end(args);
+    return out;
 }
 
 struct ir_instr *new(struct context *context) {
@@ -239,8 +250,9 @@ struct ir_reg emit_one_node(struct context *context, struct node *node, bool wri
     }
     case NODE_TERNARY: {
         struct ir_reg cond = emit_one_node(context, NODE(node->ternary.condition), false);
-        struct ir_reg cnd_false = (struct ir_reg) { .iname = "cnd.false" };
-        struct ir_reg cnd_end = (struct ir_reg) { .iname = "cnd.end" };
+        short cond_id = context->next_condition++;
+        struct ir_reg cnd_false = (struct ir_reg) { .iname = tprintf(context, "cnd%i.false", cond_id), };
+        struct ir_reg cnd_end = (struct ir_reg) { .iname = tprintf(context, "cnd%i.end", cond_id) };
         {
             ir *i = new(context);
             i->op = JZ;
