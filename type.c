@@ -367,6 +367,12 @@ int type_recur(struct context *context, struct node *node, int block_depth, int 
         node->ident.scope_id = scope_id;
         return 0;
     }
+    case NODE_IF: {
+        type_recur(context, NODE(node->if_.cond), block_depth, scope);
+        type_recur(context, NODE(node->if_.block_true), block_depth + 1, scope);
+        if (node->if_.block_false)
+            type_recur(context, NODE(node->if_.block_false), block_depth + 1, scope);
+    }
     default:
         return 0;
     }

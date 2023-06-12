@@ -66,6 +66,7 @@ void print_ir_instr(struct tu *tu, struct ir_instr *i) {
     CASE3(XOR, "xor");
     CASE3(SHR, "shr");
     CASE3(SHL, "shl");
+    CASE3(TEST, "test");
 
     CASE2(NEG, "neg");
     CASE2(INV, "inv");
@@ -220,6 +221,7 @@ struct ir_reg emit_one_node(struct context *context, struct node *node, bool wri
         case '&': i->op = AND; break;
         case '|': i->op = OR; break;
         case '^': i->op = XOR; break;
+        case TOKEN_EQUAL_EQUAL: i->op = TEST; break;
         default:
             report_error(context, "unhandled binary operation");
         }
@@ -296,6 +298,43 @@ struct ir_reg emit_one_node(struct context *context, struct node *node, bool wri
         i->r[1] = bt;
         i->r[2] = bf;
         return i->r[0];
+    }
+    case NODE_IF: {
+        struct ir_reg cond = emit_one_node(context, NODE(node->if_.cond), false);
+        short cond_id = context->next_condition++;
+        struct ir_reg cnd_false = (struct ir_reg) { .iname = tprintf(context, "if%i.else", cond_id), };
+        struct ir_reg cnd_end = (struct ir_reg) { .iname = tprintf(context, "if%i.end", cond_id) };
+        if (node->if_.block_false) {
+            ir *i = new(context);
+            i->op = JZ;
+            i->r[0] = cnd_false;
+            i->r[1] = cond;
+        } else {
+            ir *i = new(context);
+            i->op = JZ;
+            i->r[0] = cnd_end;
+            i->r[1] = cond;
+        }
+        emit_one_node(context, NODE(node->if_.block_true), false);
+        if (node->if_.block_false) {
+            {
+                ir *i = new(context);
+                i->op = JMP;
+                i->r[0] = cnd_end;
+            }
+            {
+                ir *i = new(context);
+                i->op = LABEL;
+                i->r[0] = cnd_false;
+            }
+            emit_one_node(context, NODE(node->if_.block_false), false);
+        }
+        {
+            ir *i = new(context);
+            i->op = LABEL;
+            i->r[0] = cnd_end;
+        }
+        return (struct ir_reg){};
     }
     case NODE_RETURN: {
         struct ir_reg rv = emit_one_node(context, NODE(node->ret.expr), false);

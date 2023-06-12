@@ -270,15 +270,23 @@ static void print_ast_recursive(const char *info, struct tu *tu, int node_id, in
         RECUR_INFO("bdy:", node->fun.body);
         break;
     }
-    case NODE_RETURN: {
+    case NODE_RETURN:
         printf("return:\n");
         RECUR(node->ret.expr);
         break;
-    }
-    case NODE_ERROR: {
+    case NODE_IF:
+        printf("if:\n");
+        RECUR_INFO("cnd:", node->if_.cond);
+        RECUR_INFO("yes:", node->if_.block_true);
+        if (node->if_.block_false)
+            RECUR_INFO(" no:", node->if_.block_false);
+        break;
+    case NODE_NULL:
+        printf("null:\n");
+        break;
+    case NODE_ERROR:
         printf("error: %.*s\n", token->len, &source[token->index]);
         break;
-    }
     default:
         printf("unknown\n");
     }
@@ -717,10 +725,36 @@ static int parse_return_statement(struct context *context) {
     return id(context, node);
 }
 
+static int parse_null_statement(struct context *context) {
+    struct node *node = new(context, NODE_NULL);
+    eat(context, ';');
+    return id(context, node);
+}
+
+static int parse_if_statement(struct context *context) {
+    struct node *node = new(context, NODE_IF);
+    eat(context, TOKEN_IF);
+    eat(context, '(');
+    int cond = parse_expression(context);
+    eat(context, ')');
+    int block_true = parse_statement(context);
+    int block_false = 0;
+    if (TOKEN(context)->type == TOKEN_ELSE) {
+        eat(context, TOKEN_ELSE);
+        block_false = parse_statement(context);
+    }
+    node->if_.cond = cond;
+    node->if_.block_true = block_true;
+    node->if_.block_false = block_false;
+    return id(context, node);
+}
+
 static int parse_statement(struct context *context) {
     switch (TOKEN(context)->type) {
     case '{':
         return parse_compound_statement(context);
+    case ';':
+        return parse_null_statement(context);
     case TOKEN_STATIC_ASSERT:
         return parse_declaration(context);
     case TOKEN_IDENT:
@@ -732,10 +766,8 @@ static int parse_statement(struct context *context) {
             return parse_expression_statement(context);
     case TOKEN_RETURN:
         return parse_return_statement(context);
-    // case TOKEN_BREAK:
-    //     return parse_break_statement(context);
-    // case TOKEN_IF:
-    //     return parse_if_statement(context);
+    case TOKEN_IF:
+        return parse_if_statement(context);
     }
 
     if (is_bare_type_specifier(TOKEN(context)))

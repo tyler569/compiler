@@ -30,8 +30,10 @@ int main() {
                          "    int a, b;\n"
                          "    a = 1;\n"
                          "    b = 2;\n"
-                         "    a = 2 + 4 * 6 + -b;\n"
-                         "    a = b ? a : b;\n"
+                         "    if (a == b) {\n"
+                         "        a = 10;\n"
+                         "    }\n"
+                         // "    a = b ? a : b;\n"
                          "    return a;\n"
                          "}\n";
 

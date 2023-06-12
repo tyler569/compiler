@@ -33,6 +33,7 @@ enum node_type {
     NODE_GOTO,
     NODE_SWITCH,
     NODE_CASE,
+    NODE_NULL,
 };
 
 #define MAX_BLOCK_MEMBERS 10
@@ -108,6 +109,11 @@ struct node {
         struct {
             int name;
         } label;
+        struct {
+            int cond;
+            int block_true;
+            int block_false;
+        } if_;
     };
 };
 
