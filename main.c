@@ -39,7 +39,9 @@ int main() {
     const char *source = "int foo(bool b) {"
                          "    int a = 1;"
                          "    if (b) {"
-                         "        a += 1;"
+                         "        a = 2;"
+                         "    } else {"
+                         "        a = 3;"
                          "    }"
                          "    return a;"
                          "}";

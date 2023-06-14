@@ -82,6 +82,7 @@ struct node {
             struct node *initializer;
             bool full;
             struct token *name;
+            int scope_id;
             union {
                 struct {
                     struct node *subscript;

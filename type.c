@@ -301,6 +301,8 @@ int type_recur(struct context *context, struct node *node, int block_depth, int 
             int type_id = find_or_create_type(context, base_type, decl);
             scope = create_scope(context, scope, type_id, block_depth, decl);
 
+            decl->d.scope_id = scope;
+
             if (decl->d.initializer) {
                 type_recur(context, decl->d.initializer, block_depth, scope);
             }

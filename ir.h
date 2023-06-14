@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#include "list.h"
+
 enum ir_op : char {
     LABEL,  // name
     DATA,   // ?
@@ -34,17 +36,22 @@ enum ir_op : char {
     PHI,    // r0 <- phi [ r1, r2 ]
 };
 
+typedef list(struct ir_reg) phi_list_t;
+
 struct ir_reg {
     union {
-        const char *iname;
-        struct token *name;
+        struct scope *scope;
+        const char *label;
     };
+    phi_list_t phi_list;
     short index;
+    bool is_phi;
 };
 
 struct ir_instr {
     union {
-        struct token *name;
+        // struct token *name;
+        const char *name;
         uint64_t immediate_i;
         double immediate_f;
     };
@@ -52,24 +59,25 @@ struct ir_instr {
     enum ir_op op;
 };
 
+typedef list(struct ir_instr) ir_list_t;
+typedef list(struct bb *) bb_list_t;
+typedef list(struct ir_reg) reg_list_t;
+
 struct bb {
-    struct ir_instr *instrs;
-    struct bb *inputs;
-    size_t n_inputs;
-
-    struct bb *outputs;
-    size_t n_outputs;
-
-    struct ir_reg *definitions;
-    size_t n_definitions;
+    ir_list_t ir_list;
+    bb_list_t inputs;
+    bb_list_t outputs;
+    reg_list_t owned_registers;
 };
 
 struct function {
-    struct bb *bbs;
-    size_t n_bbs;
+    bb_list_t bbs;
+    short temporary_id;
+    short cond_id;
 };
 
 typedef struct ir_instr ir;
+typedef struct ir_reg reg;
 struct tu;
 
 int emit(struct tu *tu);
