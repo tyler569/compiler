@@ -167,7 +167,6 @@ struct ir_reg next(struct context *context) {
     return (struct ir_reg){.index = context->next_reg++};
 }
 
-// struct ir_reg emit_one_node(struct context *context, struct node *node, bool write);
 struct ir_reg bb_emit_node(struct tu *tu, struct function *function, struct node *node, bool write);
 struct function *new_function();
 
@@ -186,200 +185,6 @@ int emit(struct tu *tu) {
 
     return 0;
 }
-
-// struct ir_reg emit_one_node(struct context *context, struct node *node, bool write) {
-//     switch (node->type) {
-//     case NODE_INT_LITERAL: {
-//         ir *i = new(context);
-//         i->r[0] = next(context);
-//         i->op = IMM;
-//         i->immediate_i = node->token->int_.value;
-//         return i->r[0];
-//     }
-//     case NODE_FLOAT_LITERAL: {
-//         ir *i = new(context);
-//         i->r[0] = next(context);
-//         i->op = IMM;
-//         i->immediate_f = node->token->float_.value;
-//         return i->r[0];
-//     }
-//     case NODE_IDENT: {
-//         if (write) SCOPE(node->ident.scope_id)->ir_index += 1;
-//         struct ir_reg reg = {
-//             .name = node->token,
-//             .index = SCOPE(node->ident.scope_id)->ir_index,
-//         };
-//         return reg;
-//     }
-//     case NODE_BINARY_OP: {
-//         if (node->token->type == '=') {
-//             struct ir_reg in = emit_one_node(context, node->binop.rhs, false);
-//             struct ir_reg out = emit_one_node(context, node->binop.lhs, true);
-//
-//             ir *i = new(context);
-//             i->op = MOVE;
-//             i->r[0] = out;
-//             i->r[1] = in;
-//             return i->r[0];
-//         }
-//         struct ir_reg lhs = emit_one_node(context, node->binop.lhs, false);
-//         struct ir_reg rhs = emit_one_node(context, node->binop.rhs, false);
-//
-//         ir *i = new(context);
-//         i->r[0] = next(context);
-//         switch (node->token->type) {
-//         case '+': i->op = ADD; break;
-//         case '-': i->op = SUB; break;
-//         case '*': i->op = MUL; break;
-//         case '/': i->op = DIV; break;
-//         case '%': i->op = MOD; break;
-//         case TOKEN_SHIFT_RIGHT: i->op = SHR; break;
-//         case TOKEN_SHIFT_LEFT: i->op = SHL; break;
-//         case '&': i->op = AND; break;
-//         case '|': i->op = OR; break;
-//         case '^': i->op = XOR; break;
-//         case TOKEN_EQUAL_EQUAL: i->op = TEST; break;
-//         default:
-//             report_error(context, "unhandled binary operation");
-//         }
-//         i->r[1] = lhs;
-//         i->r[2] = rhs;
-//         return i->r[0];
-//     }
-//     case NODE_UNARY_OP: {
-//         struct ir_reg inner = emit_one_node(context, node->unary_op.inner, false);
-//         if (node->token->type == '+') return inner;
-//
-//         ir *i = new(context);
-//         i->r[0] = next(context);
-//         i->r[1] = inner;
-//         switch (node->token->type) {
-//         case '-': i->op = NEG; break;
-//         case '~': i->op = INV; break;
-//         case '!': i->op = NOT; break;
-//         case '*':
-//         case '&':
-//             report_error(context, "pointers not yet supported");
-//             return i->r[0];
-//         default:
-//             report_error(context, "unknown unary operator");
-//             return i->r[0];
-//         }
-//         return i->r[0];
-//     }
-//     case NODE_TERNARY: {
-//         struct ir_reg cond = emit_one_node(context, node->ternary.condition, false);
-//         short cond_id = context->next_condition++;
-//         struct ir_reg cnd_false = (struct ir_reg) { .label = tprintf(context, "cnd%i.false", cond_id), };
-//         struct ir_reg cnd_end = (struct ir_reg) { .label = tprintf(context, "cnd%i.end", cond_id) };
-//         {
-//             ir *i = new(context);
-//             i->op = JZ;
-//             i->r[0] = cnd_false;
-//             i->r[1] = cond;
-//         }
-//         struct ir_reg bt = emit_one_node(context, node->ternary.branch_true, false);
-//         {
-//             ir *i = new(context);
-//             i->op = MOVE;
-//             i->r[0] = next(context);
-//             i->r[1] = bt;
-//             bt = i->r[0];
-//         }
-//         {
-//             ir *i = new(context);
-//             i->op = JMP;
-//             i->r[0] = cnd_end;
-//         }
-//         {
-//             ir *i = new(context);
-//             i->op = LABEL;
-//             i->r[0] = cnd_false;
-//         }
-//         struct ir_reg bf = emit_one_node(context, node->ternary.branch_false, false);
-//         {
-//             ir *i = new(context);
-//             i->op = MOVE;
-//             i->r[0] = next(context);
-//             i->r[1] = bf;
-//             bf = i->r[0];
-//         }
-//         {
-//             ir *i = new(context);
-//             i->op = LABEL;
-//             i->r[0] = cnd_end;
-//         }
-//         ir *i = new(context);
-//         i->op = PHI;
-//         i->r[0] = next(context);
-//         i->r[1] = bt;
-//         i->r[2] = bf;
-//         return i->r[0];
-//     }
-//     case NODE_IF: {
-//         struct ir_reg cond = emit_one_node(context, node->if_.cond, false);
-//         short cond_id = context->next_condition++;
-//         struct ir_reg cnd_false = (struct ir_reg) { .label = tprintf(context, "if%i.else", cond_id), };
-//         struct ir_reg cnd_end = (struct ir_reg) { .label = tprintf(context, "if%i.end", cond_id) };
-//         if (node->if_.block_false) {
-//             ir *i = new(context);
-//             i->op = JZ;
-//             i->r[0] = cnd_false;
-//             i->r[1] = cond;
-//         } else {
-//             ir *i = new(context);
-//             i->op = JZ;
-//             i->r[0] = cnd_end;
-//             i->r[1] = cond;
-//         }
-//         emit_one_node(context, node->if_.block_true, false);
-//         if (node->if_.block_false) {
-//             {
-//                 ir *i = new(context);
-//                 i->op = JMP;
-//                 i->r[0] = cnd_end;
-//             }
-//             {
-//                 ir *i = new(context);
-//                 i->op = LABEL;
-//                 i->r[0] = cnd_false;
-//             }
-//             emit_one_node(context, node->if_.block_false, false);
-//         }
-//         {
-//             ir *i = new(context);
-//             i->op = LABEL;
-//             i->r[0] = cnd_end;
-//         }
-//         return (struct ir_reg){};
-//     }
-//     case NODE_RETURN: {
-//         struct ir_reg rv = emit_one_node(context, node->ret.expr, false);
-//         ir *i = new(context);
-//         i->op = RET;
-//         i->r[0] = rv;
-//         return i->r[0];
-//     }
-//     case NODE_ROOT:
-//         for (int i = 0; i < MAX_BLOCK_MEMBERS && node->root.children[i]; i += 1) {
-//             emit_one_node(context, node->root.children[i], false);
-//         }
-//         break;
-//     case NODE_FUNCTION_DEFINITION:
-//         emit_one_node(context, node->fun.body, false);
-//         break;
-//     case NODE_BLOCK:
-//         for (int i = 0; i < MAX_BLOCK_MEMBERS && node->block.children[i]; i += 1) {
-//             emit_one_node(context, node->block.children[i], false);
-//         }
-//         break;
-//     default:
-//         fprintf(stderr, "unknown node type in emit_one: %i\n", node->type);
-//     }
-//     return (struct ir_reg){};
-// }
-
-
 
 struct ir_instr ir_move(struct ir_reg out, struct ir_reg in) {
     ir i = {
@@ -571,12 +376,6 @@ struct ir_reg bb_emit_node(struct tu *tu, struct function *function, struct node
         }
         return (reg){};
     case NODE_BINARY_OP: {
-        bool is_eq = false;
-        if (node->token->type == '=') is_eq = true;
-        reg lhs = bb_emit_node(tu, function, node->binop.lhs, is_eq);
-        reg rhs = bb_emit_node(tu, function, node->binop.rhs, false);
-        reg res;
-        if (!is_eq) new_temporary(function);
         enum ir_op op;
         switch (node->token->type) {
 #define CASE(token, p) case (token): op = (p); break
@@ -594,12 +393,17 @@ struct ir_reg bb_emit_node(struct tu *tu, struct function *function, struct node
 #undef CASE
         default:
             fprintf(stderr, "unhandled binary operation: %i\n", node->token->type);
-            break;
+            return (reg){};
         }
         if (op == MOVE) {
+            reg lhs = bb_emit_node(tu, function, node->binop.lhs, true);
+            reg rhs = bb_emit_node(tu, function, node->binop.rhs, false);
             EMIT(ir_move(lhs, rhs));
             return lhs;
         } else {
+            reg lhs = bb_emit_node(tu, function, node->binop.lhs, true);
+            reg rhs = bb_emit_node(tu, function, node->binop.rhs, false);
+            reg res = new_temporary(function);
             EMIT(ir_binop(op, res, lhs, rhs));
             return res;
         }
