@@ -115,7 +115,7 @@ void print_ir_instr(struct tu *tu, struct ir_instr *i) {
 
     case JZ:
         fprintf(stderr, "jz %s, ", i->name);
-        print_reg(tu, i, 1);
+        print_reg(tu, i, 0);
         fprintf(stderr, "\n");
         break;
 
