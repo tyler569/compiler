@@ -68,6 +68,8 @@ struct bb {
     bb_list_t inputs;
     bb_list_t outputs;
     reg_list_t owned_registers;
+    bool filled;
+    bool sealed;
 };
 
 struct function {

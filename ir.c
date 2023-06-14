@@ -104,26 +104,21 @@ void print_ir_instr(struct tu *tu, struct ir_instr *i) {
         break;
 
     case LABEL:
-        fprintf(stderr, "label: %s:\n", i->r[0].label);
+        fprintf(stderr, "label: %s:\n", i->name);
         break;
 
     case JMP:
-        fprintf(stderr, "jmp %s\n", i->r[0].label);
+        fprintf(stderr, "jmp %s\n", i->name);
         break;
 
     case JZ:
-        fprintf(stderr, "jz %s, ", i->r[0].label);
+        fprintf(stderr, "jz %s, ", i->name);
         print_reg(tu, i, 1);
         fprintf(stderr, "\n");
         break;
 
     case PHI:
-        print_reg(tu, i, 0);
-        fprintf(stderr, " := phi(");
-        print_reg(tu, i, 1);
-        fprintf(stderr, ", ");
-        print_reg(tu, i, 2);
-        fprintf(stderr, ")\n");
+        fprintf(stderr, "PHI instruction shouldn't be a thing");
         break;
 
     default:
@@ -180,7 +175,7 @@ int emit(struct tu *tu) {
     bb_emit_node(tu, function, tu->nodes, false);
 
     for_each_v (&function->bbs) {
-        fprintf(stderr, "new bb:\n");
+        fprintf(stderr, "\nnew bb:\n");
 
         for_each_n (instr, &it->ir_list) {
             print_ir_instr(tu, instr);
@@ -453,6 +448,7 @@ struct ir_instr ir_imm(uint64_t immediate, struct ir_reg out) {
 struct bb *new_bb(struct function *func, struct bb *prev) {
     struct bb *bb = calloc(1, sizeof(struct bb));
     list_push(&func->bbs, bb);
+    if (prev) list_push(&bb->inputs, prev);
 
     return bb;
 }
@@ -488,20 +484,32 @@ static struct ir_reg lookup_ident_decl(struct tu *tu, struct function *function,
     return r;
 }
 
-static struct ir_reg lookup_ident_bb(struct tu *tu, struct function *function, struct scope *scope, bool write, struct bb *bb) {
+struct ir_reg *bb_owns(struct bb *bb, struct scope *scope) {
     for_each (&bb->owned_registers) {
         if (it->scope == scope) {
-            return new_scope_reg(scope, write);
+            return it;
         }
     }
+    return nullptr;
+}
+
+void bb_own(struct bb *bb, struct ir_reg reg) {
+    list_push(&bb->owned_registers, reg);
+}
+
+static struct ir_reg lookup_ident_bb(struct tu *tu, struct function *function, struct scope *scope, bool write, struct bb *bb) {
+    if (bb_owns(bb, scope))
+        return new_scope_reg(scope, write);
 
     if (bb->inputs.len == 1) {
-        return lookup_ident_bb(tu, function, scope, write, bb->inputs.data[0]);
+        reg r = lookup_ident_bb(tu, function, scope, write, bb->inputs.data[0]);
+        if (write) bb_own(bb, r);
+        return r;
     }
 
-    if (bb->inputs.len == 0) {
+    if (bb->inputs.len == 0 && !bb->filled) {
         reg r = new_scope_reg(scope, write);
-        list_push(&bb->owned_registers, r);
+        bb_own(bb, r);
         return r;
     }
 
@@ -511,16 +519,15 @@ static struct ir_reg lookup_ident_bb(struct tu *tu, struct function *function, s
     };
 
     for_each_v (&bb->inputs) {
-        for_each_n (r, &it->owned_registers) {
-            if (r->scope == scope) {
-                list_push(&pre_phi.phi_list, *r);
-            }
-        }
+        // TODO: recurse, but there should already be one in this case
+        struct ir_reg *r = bb_owns(it, scope);
+        if (r)
+            list_push(&pre_phi.phi_list, *r);
     }
 
     if (pre_phi.phi_list.len == 0) {
         reg r = new_scope_reg(scope, write);
-        list_push(&bb->owned_registers, r);
+        bb_own(bb, r);
         return r;
     }
 
@@ -650,6 +657,7 @@ struct ir_reg bb_emit_node(struct tu *tu, struct function *function, struct node
         reg test = bb_emit_node(tu, function, node->if_.cond, false);
         const char *label_false = tprintf(tu, "if%i.false", ++function->cond_id);
         const char *label_end = tprintf(tu, "if%i.end", function->cond_id);
+
         EMIT(ir_jz(label_false, test));
 
         struct bb *bb_this = ACTIVE_BB;
