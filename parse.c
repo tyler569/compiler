@@ -257,6 +257,11 @@ static void print_ast_recursive(const char *info, struct tu *tu, struct node *no
         if (node->if_.block_false)
             RECUR_INFO(" no:", node->if_.block_false);
         break;
+    case NODE_WHILE:
+        printf("while:\n");
+        RECUR_INFO("cnd:", node->while_.cond);
+        RECUR_INFO("blk:", node->while_.block);
+        break;
     case NODE_NULL:
         printf("null:\n");
         break;
@@ -724,6 +729,18 @@ static struct node *parse_if_statement(struct context *context) {
     return node;
 }
 
+static struct node *parse_while_statement(struct context *context) {
+    struct node *node = new(context, NODE_WHILE);
+    eat(context, TOKEN_WHILE);
+    eat(context, '(');
+    struct node *cond = parse_expression(context);
+    eat(context, ')');
+    struct node *block = parse_statement(context);
+    node->while_.cond = cond;
+    node->while_.block = block;
+    return node;
+}
+
 static struct node *parse_statement(struct context *context) {
     switch (TOKEN(context)->type) {
     case '{':
@@ -743,6 +760,8 @@ static struct node *parse_statement(struct context *context) {
         return parse_return_statement(context);
     case TOKEN_IF:
         return parse_if_statement(context);
+    case TOKEN_WHILE:
+        return parse_while_statement(context);
     }
 
     if (is_bare_type_specifier(TOKEN(context)))

@@ -130,12 +130,6 @@ void print_ir_instr(struct tu *tu, struct ir_instr *i) {
     }
 }
 
-void report_error(struct context *context, const char *message) {
-    fprintf(stderr, "ir error: %s\n", message);
-    context->errors += 1;
-    exit(1);
-}
-
 // TODO: this should use the tu argument to print to tu->strtab instead of allocating
 // for itself.
 const char *tprintf(struct tu *tu, const char *format, ...) {
@@ -145,26 +139,6 @@ const char *tprintf(struct tu *tu, const char *format, ...) {
     vasprintf(&out, format, args);
     va_end(args);
     return out;
-}
-
-struct ir_instr *new(struct context *context) {
-    if (context->ia.capacity <= context->ia.len) {
-        size_t new_capacity = context->ia.capacity ? context->ia.capacity * 2 : 512;
-        struct ir_instr *new_ia = realloc(context->ia.instrs, new_capacity * sizeof(struct ir_instr));
-        if (!new_ia) {
-            report_error(context, "memory allocation failed");
-            return nullptr;
-        }
-        context->ia.instrs = new_ia;
-        context->ia.capacity = new_capacity;
-    }
-
-    struct ir_instr *ir_instr = &context->ia.instrs[context->ia.len++];
-    return ir_instr;
-}
-
-struct ir_reg next(struct context *context) {
-    return (struct ir_reg){.index = context->next_reg++};
 }
 
 struct ir_reg bb_emit_node(struct tu *tu, struct function *function, struct node *node, bool write);

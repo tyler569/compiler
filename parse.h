@@ -115,6 +115,10 @@ struct node {
             struct node *block_true;
             struct node *block_false;
         } if_;
+        struct {
+            struct node *cond;
+            struct node *block;
+        } while_;
     };
 };
 
