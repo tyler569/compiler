@@ -10,7 +10,7 @@
 #include <string.h>
 
 #define SCOPE(n) (&context->sca.scopes[(n)])
-#define NODE(n) (&context->root[(n)])
+#define NODE(n) (n)
 #define TYPE(n) (&context->tya.types[(n)])
 #define TOKEN_STR(tok) (&context->tu->source[(tok)->index])
 
@@ -336,8 +336,8 @@ int type_recur(struct context *context, struct node *node, int block_depth, int 
         return new_outer;
     }
     case NODE_BINARY_OP:
-        type_recur(context, NODE(node->binop.left), block_depth, scope);
-        type_recur(context, NODE(node->binop.right), block_depth, scope);
+        type_recur(context, NODE(node->binop.lhs), block_depth, scope);
+        type_recur(context, NODE(node->binop.rhs), block_depth, scope);
         return 0;
     case NODE_UNARY_OP:
     case NODE_POSTFIX_OP:

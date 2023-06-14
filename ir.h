@@ -3,6 +3,7 @@
 #define COMPILER_IR_H
 
 #include <stdint.h>
+#include <stddef.h>
 
 enum ir_op : char {
     LABEL,  // name
@@ -49,6 +50,23 @@ struct ir_instr {
     };
     struct ir_reg r[3];
     enum ir_op op;
+};
+
+struct bb {
+    struct ir_instr *instrs;
+    struct bb *inputs;
+    size_t n_inputs;
+
+    struct bb *outputs;
+    size_t n_outputs;
+
+    struct ir_reg *definitions;
+    size_t n_definitions;
+};
+
+struct function {
+    struct bb *bbs;
+    size_t n_bbs;
 };
 
 typedef struct ir_instr ir;

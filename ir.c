@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 
-#define NODE(n) (&context->tu->nodes[(n)])
+#define NODE(n) (n)
 #define SCOPE(n) (&context->tu->scopes[(n)])
 
 struct context {
@@ -196,8 +196,8 @@ struct ir_reg emit_one_node(struct context *context, struct node *node, bool wri
     }
     case NODE_BINARY_OP: {
         if (node->token->type == '=') {
-            struct ir_reg in = emit_one_node(context, NODE(node->binop.right), false);
-            struct ir_reg out = emit_one_node(context, NODE(node->binop.left), true);
+            struct ir_reg in = emit_one_node(context, NODE(node->binop.rhs), false);
+            struct ir_reg out = emit_one_node(context, NODE(node->binop.lhs), true);
 
             ir *i = new(context);
             i->op = MOVE;
@@ -205,8 +205,8 @@ struct ir_reg emit_one_node(struct context *context, struct node *node, bool wri
             i->r[1] = in;
             return i->r[0];
         }
-        struct ir_reg lhs = emit_one_node(context, NODE(node->binop.left), false);
-        struct ir_reg rhs = emit_one_node(context, NODE(node->binop.right), false);
+        struct ir_reg lhs = emit_one_node(context, NODE(node->binop.lhs), false);
+        struct ir_reg rhs = emit_one_node(context, NODE(node->binop.rhs), false);
 
         ir *i = new(context);
         i->r[0] = next(context);

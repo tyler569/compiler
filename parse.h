@@ -45,74 +45,74 @@ struct node {
     enum node_type type;
     union {
         struct {
-            int children[MAX_BLOCK_MEMBERS];
+            struct node *children[MAX_BLOCK_MEMBERS];
         } root;
         struct {
-            int children[MAX_BLOCK_MEMBERS];
+            struct node *children[MAX_BLOCK_MEMBERS];
         } block;
         struct {
             int scope_id;
         } ident;
         struct {
-            int left;
-            int right;
+            struct node *lhs;
+            struct node *rhs;
         } binop;
         struct {
-            int inner;
+            struct node *inner;
         } unary_op;
         struct {
-            int inner;
+            struct node *inner;
             struct token *ident;
         } member;
         struct {
-            int inner;
-            int subscript;
+            struct node *inner;
+            struct node *subscript;
         } subscript;
         struct {
-            int condition;
-            int branch_true;
-            int branch_false;
+            struct node *condition;
+            struct node *branch_true;
+            struct node *branch_false;
         } ternary;
         struct {
-            int inner;
-            int args[MAX_FUNCTION_ARGS];
+            struct node *inner;
+            struct node *args[MAX_FUNCTION_ARGS];
         } funcall;
         struct {
-            int inner;
-            int initializer;
+            struct node *inner;
+            struct node *initializer;
             bool full;
             struct token *name;
             union {
                 struct {
-                    int subscript;
+                    struct node *subscript;
                 } arr;
                 struct {
-                    int args[MAX_FUNCTION_ARGS];
+                    struct node *args[MAX_FUNCTION_ARGS];
                 } fun;
             };
         } d;
         struct {
-            int type;
-            int declarators[MAX_DECLARATORS];
+            struct node *type;
+            struct node *declarators[MAX_FUNCTION_ARGS];
         } decl;
         struct {
-            int expr;
-            int message;
+            struct node *expr;
+            struct node *message;
         } st_assert;
         struct {
-            int expr;
+            struct node *expr;
         } ret;
         struct {
-            int decl;
-            int body;
+            struct node *decl;
+            struct node *body;
         } fun;
         struct {
-            int name;
+            struct node *name;
         } label;
         struct {
-            int cond;
-            int block_true;
-            int block_false;
+            struct node *cond;
+            struct node *block_true;
+            struct node *block_false;
         } if_;
     };
 };

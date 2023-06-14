@@ -46,15 +46,15 @@ int main() {
 
     tokenize(tu);
 
-    // for (int i = 0; i < tu->tokens_len; i += 1) {
-    //     struct token *t = &tu->tokens[i];
-    //
-    //     fputs("token", stdout);
-    //     print_token_type(t);
-    //     printf("@(%i:%i) '%.*s'\n", t->line, t->column, t->len, &source[t->index]);
-    //
-    //     print_and_highlight(tu->source, t);
-    // }
+    for (int i = 0; i < tu->tokens_len; i += 1) {
+        struct token *t = &tu->tokens[i];
+
+        fputs("token", stdout);
+        print_token_type(t);
+        printf("@(%i:%i) '%.*s'\n", t->line, t->column, t->len, &source[t->index]);
+
+        print_and_highlight(tu->source, t);
+    }
 
     parse(tu);
     print_ast(tu);
