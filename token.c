@@ -1,6 +1,7 @@
 #include "token.h"
 #include "util.h"
 #include "tu.h"
+#include "diag.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -479,6 +480,18 @@ void print_token_type(struct token *token) {
 #undef CASE
     }
     putchar(')');
+}
+
+void print_tokens(struct tu *tu) {
+    for (int i = 0; i < tu->tokens_len; i += 1) {
+        struct token *t = &tu->tokens[i];
+
+        fputs("token", stdout);
+        print_token_type(t);
+        printf("@(%i:%i) '%.*s'\n", t->line, t->column, t->len, &tu->source[t->index]);
+
+        print_and_highlight(tu->source, t);
+    }
 }
 
 const char *token_type_string(int token_type) {

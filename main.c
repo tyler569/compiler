@@ -26,16 +26,23 @@ int main() {
     // const char *source = "int foo(int, char, signed);";
     // const char *source = "int (*foo)(); int (*bar())();";
     // const char *source = "int main(int a, int b) {\na = b; int c = a; int d = c; return 0; }\nint a = main;";
-    const char *source = "int main() {\n"
-                         "    int a, b;\n"
-                         "    a = 1;\n"
-                         "    b = 2;\n"
-                         "    if (a == b) {\n"
-                         "        a = 10;\n"
-                         "    }\n"
-                         // "    a = b ? a : b;\n"
-                         "    return a;\n"
-                         "}\n";
+    // const char *source = "int main() {\n"
+    //                      "    int a, b;\n"
+    //                      "    a = 1;\n"
+    //                      "    b = 2;\n"
+    //                      "    if (a == b) {\n"
+    //                      "        a = 10;\n"
+    //                      "    }\n"
+    //                      // "    a = b ? a : b;\n"
+    //                      "    return a;\n"
+    //                      "}\n";
+    const char *source = "int foo(bool b) {"
+                         "    int a = 1;"
+                         "    if (b) {"
+                         "        a += 1;"
+                         "    }"
+                         "    return a;"
+                         "}";
 
     struct tu *tu = &(struct tu){
         .source = source,
@@ -45,24 +52,17 @@ int main() {
     };
 
     tokenize(tu);
-
-    for (int i = 0; i < tu->tokens_len; i += 1) {
-        struct token *t = &tu->tokens[i];
-
-        fputs("token", stdout);
-        print_token_type(t);
-        printf("@(%i:%i) '%.*s'\n", t->line, t->column, t->len, &source[t->index]);
-
-        print_and_highlight(tu->source, t);
-    }
+    print_tokens(tu);
 
     parse(tu);
     print_ast(tu);
+
     type(tu);
 
     fprintf(stderr, "\n");
 
     emit(tu);
+
     for (int i = 0; i < tu->ir_len; i += 1) {
         print_ir_instr(tu, &tu->ir[i]);
     }
