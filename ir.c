@@ -462,7 +462,6 @@ struct function *new_function() {
 }
 
 struct ir_reg new_temporary(struct function *function) {
-
     return (reg){ .index = function->temporary_id++ };
 }
 
@@ -572,11 +571,12 @@ struct ir_reg bb_emit_node(struct tu *tu, struct function *function, struct node
         }
         return (reg){};
     case NODE_BINARY_OP: {
-        bool inner_write = false;
-        if (node->token->type == '=') inner_write = true;
-        reg lhs = bb_emit_node(tu, function, node->binop.lhs, inner_write);
+        bool is_eq = false;
+        if (node->token->type == '=') is_eq = true;
+        reg lhs = bb_emit_node(tu, function, node->binop.lhs, is_eq);
         reg rhs = bb_emit_node(tu, function, node->binop.rhs, false);
-        reg res = new_temporary(function);
+        reg res;
+        if (!is_eq) new_temporary(function);
         enum ir_op op;
         switch (node->token->type) {
 #define CASE(token, p) case (token): op = (p); break
