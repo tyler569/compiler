@@ -32,9 +32,11 @@ void print_token(struct tu *tu, struct token *token) {
 void print_ir_reg(struct tu *tu, struct ir_reg *reg) {
     if (reg->is_phi) {
         fprintf(stderr, "phi (");
+        bool first = true;
         for_each (&reg->phi_list) {
+            if (!first) fprintf(stderr, ", ");
+            first = false;
             print_ir_reg(tu, it);
-            fprintf(stderr, ", ");
         }
         fprintf(stderr, ")");
     } else {
@@ -497,6 +499,8 @@ void bb_own(struct bb *bb, struct ir_reg reg) {
     list_push(&bb->owned_registers, reg);
 }
 
+void lookup_ident_pre(struct tu *tu, struct function *function, struct bb *bb, struct scope *scope, struct ir_reg *pre_phi);
+
 static struct ir_reg lookup_ident_bb(struct tu *tu, struct function *function, struct scope *scope, bool write, struct bb *bb) {
     if (bb_owns(bb, scope))
         return new_scope_reg(scope, write);
@@ -518,11 +522,10 @@ static struct ir_reg lookup_ident_bb(struct tu *tu, struct function *function, s
         .scope = scope,
     };
 
+    bb_own(bb, pre_phi);
+
     for_each_v (&bb->inputs) {
-        // TODO: recurse, but there should already be one in this case
-        struct ir_reg *r = bb_owns(it, scope);
-        if (r)
-            list_push(&pre_phi.phi_list, *r);
+        lookup_ident_pre(tu, function, it, scope, &pre_phi);
     }
 
     if (pre_phi.phi_list.len == 0) {
@@ -544,6 +547,18 @@ static struct ir_reg lookup_ident_bb(struct tu *tu, struct function *function, s
 
     list_push(&bb->ir_list, i);
     return r;
+}
+
+void lookup_ident_pre(struct tu *tu, struct function *function, struct bb *bb, struct scope *scope, struct ir_reg *pre_phi) {
+    struct ir_reg *p_reg;
+    if ((p_reg = bb_owns(bb, scope))) {
+        list_push(&pre_phi->phi_list, *p_reg);
+        return;
+    }
+
+    for_each (&bb->inputs) {
+        lookup_ident_pre(tu, function, bb, scope, pre_phi);
+    }
 }
 
 struct ir_reg bb_emit_node(struct tu *tu, struct function *function, struct node *node, bool write) {
