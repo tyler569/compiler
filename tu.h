@@ -52,8 +52,4 @@ static inline const char *tu_token_str(struct tu *tu, int token_id) {
     return &tu->source[tu->tokens[token_id].len];
 }
 
-static inline struct node *tu_node(struct tu *tu, struct node *node) {
-    return node;
-}
-
 #endif //COMPILER_TU_H

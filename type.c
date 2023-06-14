@@ -10,7 +10,6 @@
 #include <string.h>
 
 #define SCOPE(n) (&context->sca.scopes[(n)])
-#define NODE(n) (n)
 #define TYPE(n) (&context->tya.types[(n)])
 #define TOKEN_STR(tok) (&context->tu->source[(tok)->index])
 
@@ -197,15 +196,15 @@ int find_or_create_type_inner(struct context *context, int typ, struct node *dec
             return typ;
         } else {
             int layer = find_or_create(context, typ, TYPE_POINTER, 0);
-            return find_or_create_type_inner(context, layer, NODE(decl->d.inner));
+            return find_or_create_type_inner(context, layer, decl->d.inner);
         }
     case NODE_FUNCTION_DECLARATOR: {
         int layer = find_or_create(context, typ, TYPE_FUNCTION, 0);
-        return find_or_create_type_inner(context, layer, NODE(decl->d.inner));
+        return find_or_create_type_inner(context, layer, decl->d.inner);
     }
     case NODE_ARRAY_DECLARATOR: {
         int layer = find_or_create(context, typ, TYPE_ARRAY, 0);
-        return find_or_create_type_inner(context, layer, NODE(decl->d.inner));
+        return find_or_create_type_inner(context, layer, decl->d.inner);
     }
     default:
         report_error(context, "invalid declarator type");
@@ -293,9 +292,9 @@ int type_recur(struct context *context, struct node *node, int block_depth, int 
 
     switch (node->type) {
     case NODE_DECLARATION: {
-        struct node *base_type = NODE(node->decl.type);
+        struct node *base_type = node->decl.type;
         for (int i = 0; i < MAX_DECLARATORS && node->decl.declarators[i]; i += 1) {
-            struct node *decl = NODE(node->decl.declarators[i]);
+            struct node *decl = node->decl.declarators[i];
             if (name_exists(context, decl->d.name, scope)) {
                 report_error(context, "redefinition of name");
             }
@@ -303,57 +302,57 @@ int type_recur(struct context *context, struct node *node, int block_depth, int 
             scope = create_scope(context, scope, type_id, block_depth, decl);
 
             if (decl->d.initializer) {
-                type_recur(context, NODE(decl->d.initializer), block_depth, scope);
+                type_recur(context, decl->d.initializer, block_depth, scope);
             }
         }
         return scope;
     }
     case NODE_ROOT:
         for (int i = 0; i < MAX_BLOCK_MEMBERS && node->root.children[i]; i++) {
-            int s = type_recur(context, NODE(node->root.children[i]), block_depth, scope);
+            int s = type_recur(context, node->root.children[i], block_depth, scope);
             if (s) scope = s;
         }
         return 0;
     case NODE_BLOCK:
         for (int i = 0; i < MAX_BLOCK_MEMBERS && node->block.children[i]; i++) {
-            int s = type_recur(context, NODE(node->block.children[i]), block_depth + 1, scope);
+            int s = type_recur(context, node->block.children[i], block_depth + 1, scope);
             if (s) scope = s;
         }
         return 0;
     case NODE_FUNCTION_DEFINITION: {
-        int new_outer = type_recur(context, NODE(node->fun.decl), block_depth, scope);
-        struct node *n = NODE(node->fun.decl);
-        struct node *d = NODE(n->decl.declarators[0]);
+        int new_outer = type_recur(context, node->fun.decl, block_depth, scope);
+        struct node *n = node->fun.decl;
+        struct node *d = n->decl.declarators[0];
         for (int i = 0; i < MAX_FUNCTION_ARGS && d->d.fun.args[i]; i += 1) {
-            int s = type_recur(context, NODE(d->d.fun.args[i]), block_depth + 1, scope);
+            int s = type_recur(context, d->d.fun.args[i], block_depth + 1, scope);
             if (s) scope = s;
         }
         // function body is a compound statement - that increments block_depth on its own, so
         // this drops back to outer scope to avoid the body of the function being deeper than
         // arguments.
-        type_recur(context, NODE(node->fun.body), block_depth, scope);
+        type_recur(context, node->fun.body, block_depth, scope);
 
         return new_outer;
     }
     case NODE_BINARY_OP:
-        type_recur(context, NODE(node->binop.lhs), block_depth, scope);
-        type_recur(context, NODE(node->binop.rhs), block_depth, scope);
+        type_recur(context, node->binop.lhs, block_depth, scope);
+        type_recur(context, node->binop.rhs, block_depth, scope);
         return 0;
     case NODE_UNARY_OP:
     case NODE_POSTFIX_OP:
-        type_recur(context, NODE(node->unary_op.inner), block_depth, scope);
+        type_recur(context, node->unary_op.inner, block_depth, scope);
         return 0;
     case NODE_SUBSCRIPT:
-        type_recur(context, NODE(node->subscript.inner), block_depth, scope);
-        type_recur(context, NODE(node->subscript.subscript), block_depth, scope);
+        type_recur(context, node->subscript.inner, block_depth, scope);
+        type_recur(context, node->subscript.subscript, block_depth, scope);
         return 0;
     case NODE_TERNARY:
-        type_recur(context, NODE(node->ternary.condition), block_depth, scope);
-        type_recur(context, NODE(node->ternary.branch_true), block_depth, scope);
-        type_recur(context, NODE(node->ternary.branch_false), block_depth, scope);
+        type_recur(context, node->ternary.condition, block_depth, scope);
+        type_recur(context, node->ternary.branch_true, block_depth, scope);
+        type_recur(context, node->ternary.branch_false, block_depth, scope);
         return 0;
     case NODE_RETURN:
-        type_recur(context, NODE(node->ret.expr), block_depth, scope);
+        type_recur(context, node->ret.expr, block_depth, scope);
         return 0;
     case NODE_IDENT: {
         int scope_id = resolve_name(context, node->token, scope);
@@ -368,10 +367,10 @@ int type_recur(struct context *context, struct node *node, int block_depth, int 
         return 0;
     }
     case NODE_IF: {
-        type_recur(context, NODE(node->if_.cond), block_depth, scope);
-        type_recur(context, NODE(node->if_.block_true), block_depth + 1, scope);
+        type_recur(context, node->if_.cond, block_depth, scope);
+        type_recur(context, node->if_.block_true, block_depth + 1, scope);
         if (node->if_.block_false)
-            type_recur(context, NODE(node->if_.block_false), block_depth + 1, scope);
+            type_recur(context, node->if_.block_false, block_depth + 1, scope);
     }
     default:
         return 0;

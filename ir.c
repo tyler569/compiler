@@ -8,7 +8,6 @@
 #include <stdio.h>
 #include <stdarg.h>
 
-#define NODE(n) (n)
 #define SCOPE(n) (&context->tu->scopes[(n)])
 
 struct context {
@@ -196,8 +195,8 @@ struct ir_reg emit_one_node(struct context *context, struct node *node, bool wri
     }
     case NODE_BINARY_OP: {
         if (node->token->type == '=') {
-            struct ir_reg in = emit_one_node(context, NODE(node->binop.rhs), false);
-            struct ir_reg out = emit_one_node(context, NODE(node->binop.lhs), true);
+            struct ir_reg in = emit_one_node(context, node->binop.rhs, false);
+            struct ir_reg out = emit_one_node(context, node->binop.lhs, true);
 
             ir *i = new(context);
             i->op = MOVE;
@@ -205,8 +204,8 @@ struct ir_reg emit_one_node(struct context *context, struct node *node, bool wri
             i->r[1] = in;
             return i->r[0];
         }
-        struct ir_reg lhs = emit_one_node(context, NODE(node->binop.lhs), false);
-        struct ir_reg rhs = emit_one_node(context, NODE(node->binop.rhs), false);
+        struct ir_reg lhs = emit_one_node(context, node->binop.lhs, false);
+        struct ir_reg rhs = emit_one_node(context, node->binop.rhs, false);
 
         ir *i = new(context);
         i->r[0] = next(context);
@@ -230,7 +229,7 @@ struct ir_reg emit_one_node(struct context *context, struct node *node, bool wri
         return i->r[0];
     }
     case NODE_UNARY_OP: {
-        struct ir_reg inner = emit_one_node(context, NODE(node->unary_op.inner), false);
+        struct ir_reg inner = emit_one_node(context, node->unary_op.inner, false);
         if (node->token->type == '+') return inner;
 
         ir *i = new(context);
@@ -251,7 +250,7 @@ struct ir_reg emit_one_node(struct context *context, struct node *node, bool wri
         return i->r[0];
     }
     case NODE_TERNARY: {
-        struct ir_reg cond = emit_one_node(context, NODE(node->ternary.condition), false);
+        struct ir_reg cond = emit_one_node(context, node->ternary.condition, false);
         short cond_id = context->next_condition++;
         struct ir_reg cnd_false = (struct ir_reg) { .iname = tprintf(context, "cnd%i.false", cond_id), };
         struct ir_reg cnd_end = (struct ir_reg) { .iname = tprintf(context, "cnd%i.end", cond_id) };
@@ -261,7 +260,7 @@ struct ir_reg emit_one_node(struct context *context, struct node *node, bool wri
             i->r[0] = cnd_false;
             i->r[1] = cond;
         }
-        struct ir_reg bt = emit_one_node(context, NODE(node->ternary.branch_true), false);
+        struct ir_reg bt = emit_one_node(context, node->ternary.branch_true, false);
         {
             ir *i = new(context);
             i->op = MOVE;
@@ -279,7 +278,7 @@ struct ir_reg emit_one_node(struct context *context, struct node *node, bool wri
             i->op = LABEL;
             i->r[0] = cnd_false;
         }
-        struct ir_reg bf = emit_one_node(context, NODE(node->ternary.branch_false), false);
+        struct ir_reg bf = emit_one_node(context, node->ternary.branch_false, false);
         {
             ir *i = new(context);
             i->op = MOVE;
@@ -300,7 +299,7 @@ struct ir_reg emit_one_node(struct context *context, struct node *node, bool wri
         return i->r[0];
     }
     case NODE_IF: {
-        struct ir_reg cond = emit_one_node(context, NODE(node->if_.cond), false);
+        struct ir_reg cond = emit_one_node(context, node->if_.cond, false);
         short cond_id = context->next_condition++;
         struct ir_reg cnd_false = (struct ir_reg) { .iname = tprintf(context, "if%i.else", cond_id), };
         struct ir_reg cnd_end = (struct ir_reg) { .iname = tprintf(context, "if%i.end", cond_id) };
@@ -315,7 +314,7 @@ struct ir_reg emit_one_node(struct context *context, struct node *node, bool wri
             i->r[0] = cnd_end;
             i->r[1] = cond;
         }
-        emit_one_node(context, NODE(node->if_.block_true), false);
+        emit_one_node(context, node->if_.block_true, false);
         if (node->if_.block_false) {
             {
                 ir *i = new(context);
@@ -327,7 +326,7 @@ struct ir_reg emit_one_node(struct context *context, struct node *node, bool wri
                 i->op = LABEL;
                 i->r[0] = cnd_false;
             }
-            emit_one_node(context, NODE(node->if_.block_false), false);
+            emit_one_node(context, node->if_.block_false, false);
         }
         {
             ir *i = new(context);
@@ -337,7 +336,7 @@ struct ir_reg emit_one_node(struct context *context, struct node *node, bool wri
         return (struct ir_reg){};
     }
     case NODE_RETURN: {
-        struct ir_reg rv = emit_one_node(context, NODE(node->ret.expr), false);
+        struct ir_reg rv = emit_one_node(context, node->ret.expr, false);
         ir *i = new(context);
         i->op = RET;
         i->r[0] = rv;
@@ -345,18 +344,19 @@ struct ir_reg emit_one_node(struct context *context, struct node *node, bool wri
     }
     case NODE_ROOT:
         for (int i = 0; i < MAX_BLOCK_MEMBERS && node->root.children[i]; i += 1) {
-            emit_one_node(context, NODE(node->root.children[i]), false);
+            emit_one_node(context, node->root.children[i], false);
         }
         break;
     case NODE_FUNCTION_DEFINITION:
-        emit_one_node(context, NODE(node->fun.body), false);
+        emit_one_node(context, node->fun.body, false);
         break;
     case NODE_BLOCK:
         for (int i = 0; i < MAX_BLOCK_MEMBERS && node->block.children[i]; i += 1) {
-            emit_one_node(context, NODE(node->block.children[i]), false);
+            emit_one_node(context, node->block.children[i], false);
         }
         break;
     default:
         fprintf(stderr, "unknown node type in emit_one: %i\n", node->type);
     }
+    return (struct ir_reg){};
 }

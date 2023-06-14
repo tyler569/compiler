@@ -11,7 +11,6 @@
 
 typedef int node_pos;
 
-#define NODE(n) (n)
 #define TOKEN(context) (&context->tokens[context->position])
 #define PEEK(context) (&context->tokens[context->position + 1])
 #define PEEKN(context, n) (&context->tokens[context->position + (n)])
@@ -30,7 +29,6 @@ struct context {
 static bool is_typename(struct context *, struct token *first, size_t count);
 static bool more_data(struct context *);
 static struct node *new(struct context *, enum node_type);
-static struct node *id(struct context *, struct node *);
 static void report_error(struct context *, const char *message);
 static struct node *report_error_node(struct context *, const char *message);
 static void pass(struct context *);
@@ -79,13 +77,6 @@ static struct node *new(struct context *context, enum node_type type) {
     return node;
 }
 
-static struct node *id(struct context *context, struct node *node) {
-    if (node == nullptr) {
-        exit(1);
-    }
-    return node;
-}
-
 static void report_error(struct context *context, const char *message) {
     fprintf(stderr, "ast error: %s\n", message);
     print_and_highlight(context->source, TOKEN(context));
@@ -102,7 +93,7 @@ static struct node *report_error_node(struct context *context, const char *messa
     if (context->tu->abort) exit(1);
 
     pass(context);
-    return id(context, node);
+    return node;
 }
 
 static void pass(struct context *context) {
@@ -236,7 +227,7 @@ static void print_ast_recursive(const char *info, struct tu *tu, struct node *no
                 break;
             }
             printf(" -> ");
-            n = tu_node(tu, n->d.inner);
+            n = n->d.inner;
         }
         if (node->d.initializer)
             RECUR_INFO("ini:", node->d.initializer);
@@ -288,7 +279,7 @@ static struct node *parse_ident(struct context *context) {
         return report_error_node(context, "expected an ident, but didn't find it");
     struct node *node = new(context, NODE_IDENT);
     pass(context);
-    return id(context, node);
+    return node;
 }
 
 static struct node *parse_primary_expression(struct context *context) {
@@ -296,22 +287,22 @@ static struct node *parse_primary_expression(struct context *context) {
     case TOKEN_INT: {
         struct node *node = new(context, NODE_INT_LITERAL);
         pass(context);
-        return id(context, node);
+        return node;
     }
     case TOKEN_FLOAT: {
         struct node *node = new(context, NODE_FLOAT_LITERAL);
         pass(context);
-        return id(context, node);
+        return node;
     }
     case TOKEN_IDENT: {
         struct node *node = new(context, NODE_IDENT);
         pass(context);
-        return id(context, node);
+        return node;
     }
     case TOKEN_STRING: {
         struct node *node = new(context, NODE_STRING_LITERAL);
         pass(context);
-        return id(context, node);
+        return node;
     }
     case '(': {
         pass(context);
@@ -334,7 +325,7 @@ static struct node *parse_postfix_expression(struct context *context) {
             struct node *node = new(context, NODE_POSTFIX_OP);
             pass(context);
             node->unary_op.inner = inner;
-            inner = id(context, node);
+            inner = node;
             break;
         }
         case '.':
@@ -347,7 +338,7 @@ static struct node *parse_postfix_expression(struct context *context) {
             node->member.inner = inner;
             node->member.ident = TOKEN(context);
             pass(context);
-            inner = id(context, node);
+            inner = node;
             break;
         }
         case '(': {
@@ -360,7 +351,7 @@ static struct node *parse_postfix_expression(struct context *context) {
                 if (TOKEN(context)->type != ')') eat(context, ',');
             }
             eat(context, ')');
-            inner = id(context, node);
+            inner = node;
             break;
         }
         case '[': {
@@ -369,7 +360,7 @@ static struct node *parse_postfix_expression(struct context *context) {
             node->subscript.inner = inner;
             node->subscript.subscript = parse_expression(context);
             eat(context, ']');
-            inner = id(context, node);
+            inner = node;
             break;
         }
         default:
@@ -389,7 +380,7 @@ static struct node *parse_prefix_expression(struct context *context) {
         struct node *node = new(context, NODE_UNARY_OP);
         pass(context);
         node->unary_op.inner = parse_prefix_expression(context);
-        return id(context, node);
+        return node;
     } else {
         return parse_postfix_expression(context);
     }
@@ -408,7 +399,7 @@ static struct node *name(struct context *context) { \
         pass(context); \
         node->binop.lhs = result; \
         node->binop.rhs = upstream(context); \
-        result = id(context, node); \
+        result = node; \
         token = TOKEN(context); \
     } \
     return result; \
@@ -440,7 +431,7 @@ static struct node *parse_ternary_expression(struct context *context) {
     node->ternary.condition = condition;
     node->ternary.branch_true = branch_true;
     node->ternary.branch_false = branch_false;
-    return id(context, node);
+    return node;
 }
 
 static struct node *parse_assignment_expression(struct context *context) {
@@ -459,7 +450,7 @@ static struct node *parse_assignment_expression(struct context *context) {
 
         node->binop.lhs = expr;
         node->binop.rhs = parse_assignment_expression(context);
-        return id(context, node);
+        return node;
     } else {
         *context = saved;
         return parse_ternary_expression(context);
@@ -517,7 +508,7 @@ static struct node *parse_type_specifier(struct context *context) {
     if (is_bare_type_specifier(token)) {
         struct node *node = new(context, NODE_TYPE_SPECIFIER);
         pass(context);
-        return id(context, node);
+        return node;
     } else {
         return report_error_node(context, "non-basic type specifiers are not yet supported");
     }
@@ -542,27 +533,27 @@ static struct node *parse_declarator(struct context *context) {
         struct node *node = new(context, NODE_DECLARATOR);
         pass(context);
         node->d.inner = parse_declarator(context);
-        node->d.name = NODE(node->d.inner)->d.name;
-        return id(context, node);
+        node->d.name = node->d.inner->d.name;
+        return node;
     } else {
         return parse_direct_declarator(context);
     }
 }
 
 static struct node *parse_direct_declarator(struct context *context) {
-    struct node *node_id;
+    struct node *node;
 
     switch (TOKEN(context)->type) {
     case TOKEN_IDENT: {
-        struct node *node = new(context, NODE_DECLARATOR);
-        node->d.name = TOKEN(context);
+        struct node *inner = new(context, NODE_DECLARATOR);
+        inner->d.name = TOKEN(context);
         pass(context);
-        node_id = id(context, node);
+        node = inner;
         break;
     }
     case '(': {
         pass(context);
-        node_id = parse_declarator(context);
+        node = parse_declarator(context);
         eat(context, ')');
         break;
     }
@@ -570,35 +561,35 @@ static struct node *parse_direct_declarator(struct context *context) {
         return report_error_node(context, "unable to parse d");
     }
 
-    struct node *node = nullptr;
+    struct node *inner = nullptr;
 
     bool cont = true;
     while (cont) {
         switch (TOKEN(context)->type) {
         case '[': {
-            node = new(context, NODE_ARRAY_DECLARATOR);
+            inner = new(context, NODE_ARRAY_DECLARATOR);
             pass(context);
-            node->d.inner = node_id;
-            node->d.name = NODE(node->d.inner)->d.name;
+            inner->d.inner = node;
+            inner->d.name = inner->d.inner->d.name;
             if (TOKEN(context)->type != ']')
-                node->d.arr.subscript = parse_assignment_expression(context);
+                inner->d.arr.subscript = parse_assignment_expression(context);
             eat(context, ']');
-            node_id = id(context, node);
+            node = inner;
             break;
         }
         case '(': {
-            node = new(context, NODE_FUNCTION_DECLARATOR);
+            inner = new(context, NODE_FUNCTION_DECLARATOR);
             eat(context, '(');
-            node->d.inner = node_id;
-            node->d.name = NODE(node->d.inner)->d.name;
+            inner->d.inner = node;
+            inner->d.name = inner->d.inner->d.name;
             // TODO: args
             int i = 0;
             while (TOKEN(context)->type != ')' && i < MAX_FUNCTION_ARGS) {
-                node->d.fun.args[i++] = parse_single_declaration(context);
+                inner->d.fun.args[i++] = parse_single_declaration(context);
                 if (TOKEN(context)->type != ')') eat(context, ',');
             }
             eat(context, ')');
-            node_id = id(context, node);
+            node = inner;
             break;
         }
         default:
@@ -606,22 +597,22 @@ static struct node *parse_direct_declarator(struct context *context) {
         }
     }
 
-    return node_id;
+    return node;
 }
 
 static struct node *parse_full_declarator(struct context *context) {
-    struct node *node_id = parse_declarator(context);
+    struct node *inner = parse_declarator(context);
     struct node *expr = nullptr;
     if (TOKEN(context)->type == '=') {
         pass(context);
         expr = parse_assignment_expression(context);
     }
 
-    struct node *node = node_id;
+    struct node *node = inner;
     node->d.initializer = expr;
     node->d.full = true;
 
-    return node_id;
+    return inner;
 }
 
 static struct node *parse_static_assert_declaration(struct context *context) {
@@ -639,7 +630,7 @@ static struct node *parse_static_assert_declaration(struct context *context) {
     }
     eat(context, ')');
     eat(context, ';');
-    return id(context, node);
+    return node;
 }
 
 static struct node *parse_declaration(struct context *context) {
@@ -658,7 +649,7 @@ static struct node *parse_declaration(struct context *context) {
     }
     eat(context, ';');
 
-    return id(context, node);
+    return node;
 }
 
 // a "single declaration" contains 0 or 1 declarators and doesn't necessarily end with a ;
@@ -670,7 +661,7 @@ static struct node *parse_single_declaration(struct context *context) {
     if (TOKEN(context)->type == '*' || TOKEN(context)->type == '(' || TOKEN(context)->type == TOKEN_IDENT)
         node->decl.declarators[0] = parse_full_declarator(context);
 
-    return id(context, node);
+    return node;
 }
 
 // parse_other_statements
@@ -689,14 +680,14 @@ static struct node *parse_compound_statement(struct context *context) {
         node->block.children[i++] = parse_statement(context);
     }
     eat(context, '}');
-    return id(context, node);
+    return node;
 }
 
 static struct node *parse_label(struct context *context) {
     struct node *node = new(context, NODE_LABEL);
     node->label.name = parse_ident(context);
     eat(context, ':');
-    return id(context, node);
+    return node;
 }
 
 static struct node *parse_return_statement(struct context *context) {
@@ -706,13 +697,13 @@ static struct node *parse_return_statement(struct context *context) {
         node->ret.expr = parse_expression(context);
     }
     eat(context, ';');
-    return id(context, node);
+    return node;
 }
 
 static struct node *parse_null_statement(struct context *context) {
     struct node *node = new(context, NODE_NULL);
     eat(context, ';');
-    return id(context, node);
+    return node;
 }
 
 static struct node *parse_if_statement(struct context *context) {
@@ -730,7 +721,7 @@ static struct node *parse_if_statement(struct context *context) {
     node->if_.cond = cond;
     node->if_.block_true = block_true;
     node->if_.block_false = block_false;
-    return id(context, node);
+    return node;
 }
 
 static struct node *parse_statement(struct context *context) {
@@ -764,7 +755,7 @@ static struct node *parse_function_definition(struct context *context) {
     struct node *node = new(context, NODE_FUNCTION_DEFINITION);
     node->fun.decl = parse_single_declaration(context);
     node->fun.body = parse_compound_statement(context);
-    return id(context, node);
+    return node;
 }
 
 static struct node *parse_external_definition(struct context *context) {
