@@ -32,3 +32,4 @@ do {                           \
 #define for_each(list) for (typeof((list)->data) it = (list)->data; it < &list_end((list)); it += 1)
 #define for_each_n(N, list) for (typeof((list)->data) N = (list)->data; N < &list_end((list)); N += 1)
 #define for_each_v(list) for (typeof((list)->data[0]) *_pit = (list)->data, it = *_pit; _pit < &list_end((list)); _pit += 1, it = *_pit)
+#define for_each_vn(N, list) for (typeof((list)->data[0]) *_p##N = (list)->data, N = *_p##N; _p##N < &list_end((list)); _p##N += 1, N = *_p##N)

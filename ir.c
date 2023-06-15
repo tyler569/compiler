@@ -130,6 +130,30 @@ void print_ir_instr(struct tu *tu, struct ir_instr *i) {
     }
 }
 
+void print_link(struct bb *from, struct bb *to) {
+    if (from->name)
+        fprintf(stderr, "    \"%s\" -> ", from->name);
+    else
+        fprintf(stderr, "    \"%p\" -> ", from);
+    if (to->name)
+        fprintf(stderr, "\"%s\";\n", to->name);
+    else
+        fprintf(stderr, "\"%p\";\n", to);
+}
+
+void print_control_flow(struct tu *tu, struct function *function) {
+    fprintf(stderr, "digraph controlflow {\n");
+    for_each_v (&function->bbs) {
+        for_each_n (bb, &it->inputs) {
+            print_link(*bb, it);
+        }
+        for_each_n (bb, &it->outputs) {
+            print_link(it, *bb);
+        }
+    }
+    fprintf(stderr, "}\n");
+}
+
 // TODO: this should use the tu argument to print to tu->strtab instead of allocating
 // for itself.
 const char *tprintf(struct tu *tu, const char *format, ...) {
@@ -156,6 +180,9 @@ int emit(struct tu *tu) {
             print_ir_instr(tu, instr);
         }
     }
+
+    // fprintf(stderr, "\n");
+    // print_control_flow(tu, function);
 
     return 0;
 }
@@ -280,6 +307,10 @@ void bb_own(struct bb *bb, struct ir_reg reg) {
 void lookup_ident_pre(struct tu *tu, struct function *function, struct bb *bb, struct scope *scope, struct ir_reg *pre_phi);
 
 static struct ir_reg lookup_ident_bb(struct tu *tu, struct function *function, struct scope *scope, bool write, struct bb *bb) {
+    fprintf(stderr, "looking up ");
+    print_token(tu, scope->token);
+    fprintf(stderr, " in bb %s (%zu inputs)\n", bb->name ?: "(anon)", bb->inputs.len);
+
     if (bb_owns(bb, scope))
         return new_scope_reg(scope, write);
 
@@ -289,7 +320,7 @@ static struct ir_reg lookup_ident_bb(struct tu *tu, struct function *function, s
         return r;
     }
 
-    if (bb->inputs.len == 0 && !bb->filled) {
+    if (bb->inputs.len == 0) {
         reg r = new_scope_reg(scope, write);
         bb_own(bb, r);
         return r;
@@ -317,28 +348,79 @@ static struct ir_reg lookup_ident_bb(struct tu *tu, struct function *function, s
         return r;
     }
 
-    reg r = new_temporary(function);
-    ir i = {
-        .op = MOVE,
-        .r = { r, pre_phi },
-    };
-
-    list_push(&bb->ir_list, i);
-    return r;
+    return pre_phi;
 }
 
 void lookup_ident_pre(struct tu *tu, struct function *function, struct bb *bb, struct scope *scope, struct ir_reg *pre_phi) {
+    fprintf(stderr, "  recur into bb %s\n", bb->name ?: "(anon)");
+
     struct ir_reg *p_reg;
     if ((p_reg = bb_owns(bb, scope))) {
         list_push(&pre_phi->phi_list, *p_reg);
         return;
     }
 
-    return;
+    if (bb->inputs.len == 1) {
+        lookup_ident_pre(tu, function, bb->inputs.data[0], scope, pre_phi);
+    }
+
+    if (bb->inputs.len == 0) {
+        return;
+    }
+
+    reg new_pre_phi = (reg){ .is_phi = true, .scope = scope, };
+    bb_own(bb, new_pre_phi);
 
     for_each (&bb->inputs) {
-        lookup_ident_pre(tu, function, bb, scope, pre_phi);
+        lookup_ident_pre(tu, function, bb, scope, &new_pre_phi);
     }
+
+    list_push(&pre_phi->phi_list, new_pre_phi);
+}
+
+struct ir_reg lookup_ident_2_global(struct tu *tu, struct bb *bb, struct scope *scope);
+
+struct ir_reg lookup_ident_2_local(struct tu *tu, struct bb *bb, struct scope *scope) {
+    reg *r;
+    if ((r = bb_owns(bb, scope))) {
+        return *r;
+    }
+
+    return lookup_ident_2_global(tu, bb, scope);
+}
+
+void add_phi_operands(struct tu *tu, struct bb *bb, struct ir_reg *phi) {
+    for_each_v (&bb->inputs) {
+        reg r = lookup_ident_2_local(tu, it, phi->scope);
+
+        list_push(&phi->phi_list, r);
+    }
+}
+
+struct ir_reg lookup_ident_2_global(struct tu *tu, struct bb *bb, struct scope *scope) {
+    if (!bb->sealed) {
+        return (reg){ .is_phi = true, .scope = scope };
+        // incompletePhis
+    }
+
+    if (bb->inputs.len == 1) {
+        return lookup_ident_2_local(tu, bb->inputs.data[0], scope);
+    }
+
+    reg phi = { .is_phi = true, .scope = scope };
+    bb_own(bb, phi);
+    list_push(&phi.phi_list, phi);
+    add_phi_operands(tu, bb, &phi);
+
+    return phi;
+}
+
+void bb_seal(struct bb *bb) {
+    bb->sealed = true;
+}
+
+void bb_fill(struct bb *bb) {
+    bb->filled = true;
 }
 
 struct ir_reg bb_emit_node(struct tu *tu, struct function *function, struct node *node, bool write) {
@@ -390,7 +472,7 @@ struct ir_reg bb_emit_node(struct tu *tu, struct function *function, struct node
         break;
     case NODE_IDENT: {
         struct scope *scope = TSCOPE(node->ident.scope_id);
-        return lookup_ident(tu, function, scope, write);
+        return lookup_ident_2_local(tu, ACTIVE_BB, scope);
     }
     case NODE_INT_LITERAL: {
         reg res = new_temporary(function);
@@ -455,21 +537,29 @@ struct ir_reg bb_emit_node(struct tu *tu, struct function *function, struct node
 
         EMIT(ir_jz(label_false, test));
 
-        struct bb *bb_this = ACTIVE_BB;
+        struct bb *bb_before_if = ACTIVE_BB;
+        bb_fill(ACTIVE_BB);
 
-        struct bb *bb_true = new_bb(function, bb_this);
+        struct bb *bb_true = new_bb(function, bb_before_if);
+        bb_seal(bb_true);
+
         bb_true->name = "if.true";
         bb_emit_node(tu, function, node->if_.block_true, false);
         EMIT(ir_jmp(label_end));
+        bb_fill(ACTIVE_BB);
 
-        struct bb *bb_false = new_bb(function, bb_this);
+        struct bb *bb_false = new_bb(function, bb_before_if);
+        bb_seal(bb_false);
+
         bb_false->name = "if.false";
         EMIT(ir_label(label_false));
         bb_emit_node(tu, function, node->if_.block_false, false);
+        bb_fill(ACTIVE_BB);
 
         struct bb *bb_end = new_bb(function, bb_true);
         bb_end->name = "if.end";
         list_push(&bb_end->inputs, bb_false);
+        bb_seal(bb_end);
 
         EMIT(ir_label(label_end));
 
@@ -479,26 +569,32 @@ struct ir_reg bb_emit_node(struct tu *tu, struct function *function, struct node
         const char *label_top = tprintf(tu, "while%i.top", ++function->cond_id);
         const char *label_end = tprintf(tu, "while%i.end", function->cond_id);
 
-        struct bb *bb_this = ACTIVE_BB;
+        struct bb *bb_before_while = ACTIVE_BB;
+        bb_fill(ACTIVE_BB);
 
-        struct bb *bb_test = new_bb(function, bb_this);
+        struct bb *bb_test = new_bb(function, bb_before_while);
         bb_test->name = "while.test";
         EMIT(ir_label(label_top));
         reg test = bb_emit_node(tu, function, node->while_.cond, false);
         EMIT(ir_jz(label_end, test));
+        bb_fill(bb_test);
 
         struct bb *bb_body = new_bb(function, bb_test);
+        bb_seal(bb_body);
         bb_body->name = "while.body";
         bb_emit_node(tu, function, node->while_.block, false);
         EMIT(ir_jmp(label_top));
+        bb_fill(bb_body);
 
         struct bb *bb_body_end = ACTIVE_BB;
 
         struct bb *bb_end = new_bb(function, bb_test);
+        bb_seal(bb_end);
         bb_end->name = "while.end";
         EMIT(ir_label(label_end));
 
         list_push(&bb_test->inputs, bb_body_end);
+        bb_seal(bb_test);
 
         return (reg){};
     }
