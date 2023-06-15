@@ -334,6 +334,8 @@ void lookup_ident_pre(struct tu *tu, struct function *function, struct bb *bb, s
         return;
     }
 
+    return;
+
     for_each (&bb->inputs) {
         lookup_ident_pre(tu, function, bb, scope, pre_phi);
     }
@@ -456,22 +458,50 @@ struct ir_reg bb_emit_node(struct tu *tu, struct function *function, struct node
         struct bb *bb_this = ACTIVE_BB;
 
         struct bb *bb_true = new_bb(function, bb_this);
+        bb_true->name = "if.true";
         bb_emit_node(tu, function, node->if_.block_true, false);
         EMIT(ir_jmp(label_end));
 
         struct bb *bb_false = new_bb(function, bb_this);
+        bb_false->name = "if.false";
         EMIT(ir_label(label_false));
         bb_emit_node(tu, function, node->if_.block_false, false);
 
         struct bb *bb_end = new_bb(function, bb_true);
+        bb_end->name = "if.end";
         list_push(&bb_end->inputs, bb_false);
 
         EMIT(ir_label(label_end));
 
         return (reg){};
     }
-    case NODE_WHILE:
-        break;
+    case NODE_WHILE: {
+        const char *label_top = tprintf(tu, "while%i.top", ++function->cond_id);
+        const char *label_end = tprintf(tu, "while%i.end", function->cond_id);
+
+        struct bb *bb_this = ACTIVE_BB;
+
+        struct bb *bb_test = new_bb(function, bb_this);
+        bb_test->name = "while.test";
+        EMIT(ir_label(label_top));
+        reg test = bb_emit_node(tu, function, node->while_.cond, false);
+        EMIT(ir_jz(label_end, test));
+
+        struct bb *bb_body = new_bb(function, bb_test);
+        bb_body->name = "while.body";
+        bb_emit_node(tu, function, node->while_.block, false);
+        EMIT(ir_jmp(label_top));
+
+        struct bb *bb_body_end = ACTIVE_BB;
+
+        struct bb *bb_end = new_bb(function, bb_test);
+        bb_end->name = "while.end";
+        EMIT(ir_label(label_end));
+
+        list_push(&bb_test->inputs, bb_body_end);
+
+        return (reg){};
+    }
     case NODE_DO:
         break;
     case NODE_FOR:

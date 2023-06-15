@@ -373,6 +373,12 @@ int type_recur(struct context *context, struct node *node, int block_depth, int 
         type_recur(context, node->if_.block_true, block_depth + 1, scope);
         if (node->if_.block_false)
             type_recur(context, node->if_.block_false, block_depth + 1, scope);
+        return 0;
+    }
+    case NODE_WHILE: {
+        type_recur(context, node->while_.cond, block_depth, scope);
+        type_recur(context, node->while_.block, block_depth + 1, scope);
+        return 0;
     }
     default:
         return 0;

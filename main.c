@@ -38,7 +38,7 @@ int main() {
     //                      "}\n";
     const char *source = "int foo(bool b) {"
                          "    int a = 1;"
-                         "    while (a > 3) {"
+                         "    while (a + 3) {"
                          "        if (b) {"
                          "            a = 2;"
                          "        } else {"

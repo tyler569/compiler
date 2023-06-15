@@ -64,6 +64,7 @@ typedef list(struct bb *) bb_list_t;
 typedef list(struct ir_reg) reg_list_t;
 
 struct bb {
+    const char *name;
     ir_list_t ir_list;
     bb_list_t inputs;
     bb_list_t outputs;
