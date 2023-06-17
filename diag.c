@@ -55,11 +55,12 @@ void print_and_highlight_extent(struct tu *tu, struct token *begin, struct token
 
     print_line(tu->source, begin->index, begin->line);
 
-    //if (begin->line != end->line) {
-    //     print_highlight(begin->column + 4, line_len(tu->source + begin->column) - begin->column);
-    // } else {
+    if (begin->line != end->line) {
+        int len = line_len(tu->source + begin->index);
+        print_highlight(begin->column + 4, len);
+    } else {
         print_highlight(begin->column + 4, end->column + end->len - begin->column);
-    // }
+    }
 }
 
 void print_error(struct tu *tu, struct node *node, const char *format, ...) {
