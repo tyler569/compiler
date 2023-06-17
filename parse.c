@@ -124,7 +124,9 @@ static void print_space(int level) {
 #define RECUR(node) print_ast_recursive(nullptr, tu, (node), level + 1)
 #define RECUR_INFO(info, node) print_ast_recursive((info), tu, (node), level + 1)
 static void print_ast_recursive(const char *info, struct tu *tu, struct node *node, int level) {
-    if (level > 10) exit(1);
+    print_error(tu, node, "testing");
+
+    if (level > 20) exit(1);
     print_space(level);
     if (info) printf("%s ", info);
 
@@ -279,6 +281,48 @@ void print_ast(struct tu *tu) {
     print_ast_recursive(nullptr, tu, tu->nodes, 0);
 }
 
+struct token *node_begin(struct node *node) {
+    switch (node->type) {
+    case NODE_BINARY_OP:
+        return node_begin(node->binop.lhs);
+    case NODE_POSTFIX_OP:
+        return node_begin(node->unary_op.inner);
+    case NODE_FUNCTION_DECLARATOR:
+    case NODE_ARRAY_DECLARATOR:
+        return node_begin(node->d.inner);
+    case NODE_TERNARY:
+        return node_begin(node->ternary.condition);
+    default:
+        return node->token;
+    }
+}
+
+struct token *node_end(struct node *node) {
+    if (node->token_end) return node->token_end;
+
+    switch (node->type) {
+    case NODE_FUNCTION_DEFINITION:
+        return node_end(node->fun.body);
+    case NODE_IF:
+        if (node->if_.block_false)
+            return node_end(node->if_.block_false);
+        else
+            return node_end(node->if_.block_true);
+    case NODE_WHILE:
+        return node_end(node->while_.block);
+    case NODE_UNARY_OP:
+        return node_end(node->unary_op.inner);
+    case NODE_BINARY_OP:
+        return node_end(node->binop.rhs);
+    case NODE_DECLARATOR:
+        return node_end(node->d.inner);
+    case NODE_TERNARY:
+        return node_end(node->ternary.branch_false);
+    default:
+        return node->token;
+    }
+}
+
 static struct node *parse_ident(struct context *context) {
     if (TOKEN(context)->type != TOKEN_IDENT)
         return report_error_node(context, "expected an ident, but didn't find it");
@@ -312,6 +356,7 @@ static struct node *parse_primary_expression(struct context *context) {
     case '(': {
         pass(context);
         struct node *expr = parse_expression(context);
+        expr->token_end = TOKEN(context);
         eat(context, ')');
         return expr;
     }
@@ -342,6 +387,7 @@ static struct node *parse_postfix_expression(struct context *context) {
             pass(context);
             node->member.inner = inner;
             node->member.ident = TOKEN(context);
+            node->token_end = TOKEN(context);
             pass(context);
             inner = node;
             break;
@@ -559,6 +605,7 @@ static struct node *parse_direct_declarator(struct context *context) {
     case '(': {
         pass(context);
         node = parse_declarator(context);
+        node->token_end = TOKEN(context);
         eat(context, ')');
         break;
     }
@@ -578,6 +625,7 @@ static struct node *parse_direct_declarator(struct context *context) {
             inner->d.name = inner->d.inner->d.name;
             if (TOKEN(context)->type != ']')
                 inner->d.arr.subscript = parse_assignment_expression(context);
+            node->token_end = TOKEN(context);
             eat(context, ']');
             node = inner;
             break;
@@ -593,6 +641,7 @@ static struct node *parse_direct_declarator(struct context *context) {
                 inner->d.fun.args[i++] = parse_single_declaration(context);
                 if (TOKEN(context)->type != ')') eat(context, ',');
             }
+            node->token_end = TOKEN(context);
             eat(context, ')');
             node = inner;
             break;
@@ -634,6 +683,7 @@ static struct node *parse_static_assert_declaration(struct context *context) {
         }
     }
     eat(context, ')');
+    node->token_end = TOKEN(context);
     eat(context, ';');
     return node;
 }
@@ -652,6 +702,7 @@ static struct node *parse_declaration(struct context *context) {
         if (TOKEN(context)->type != ';')
             eat(context, ',');
     }
+    node->token_end = TOKEN(context);
     eat(context, ';');
 
     return node;
@@ -684,6 +735,7 @@ static struct node *parse_compound_statement(struct context *context) {
     while (TOKEN(context)->type != '}') {
         node->block.children[i++] = parse_statement(context);
     }
+    node->token_end = TOKEN(context);
     eat(context, '}');
     return node;
 }
@@ -691,6 +743,7 @@ static struct node *parse_compound_statement(struct context *context) {
 static struct node *parse_label(struct context *context) {
     struct node *node = new(context, NODE_LABEL);
     node->label.name = parse_ident(context);
+    node->token_end = TOKEN(context);
     eat(context, ':');
     return node;
 }
@@ -701,6 +754,7 @@ static struct node *parse_return_statement(struct context *context) {
     if (TOKEN(context)->type != ';') {
         node->ret.expr = parse_expression(context);
     }
+    node->token_end = TOKEN(context);
     eat(context, ';');
     return node;
 }

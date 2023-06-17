@@ -7,6 +7,7 @@ struct {        \
     size_t cap; \
 }
 
+
 #define list_init(list)     \
 do {                        \
     (list)->data = nullptr; \

@@ -42,6 +42,7 @@ enum node_type {
 
 struct node {
     struct token *token;
+    struct token *token_end;
     enum node_type type;
     union {
         struct {

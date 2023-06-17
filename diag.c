@@ -24,14 +24,42 @@ void print_line(const char *source, int position, int line_number) {
     fprintf(stderr, "%3i| %.*s\n", line_number, len, start);
 }
 
+static void print_highlight(int begin, int len) {
+    for (int i = 0; i < begin; i += 1) fputc(' ', stderr);
+    fputc('^', stderr);
+    for (int i = 1; i < len; i += 1) fputc('~', stderr);
+    fputc('\n', stderr);
+}
+
+static int line_len(const char *line_ptr) {
+    int len;
+    for (len = 0; line_ptr[len] && line_ptr[len] != '\n'; len += 1) {
+        if (line_ptr[len] == '\t') {
+            // do something special
+        }
+    }
+    return len;
+}
+
 void print_and_highlight(const char *source, struct token *token) {
     if (token->line == 0) return;
 
     print_line(source, token->index, token->line);
-    for (int i = 0; i < token->column + 4; i += 1) fputc(' ', stderr);
-    fputc('^', stderr);
-    for (int i = 1; i < token->len; i += 1) fputc('~', stderr);
-    fputc('\n', stderr);
+    print_highlight(token->column + 4, token->len);
+}
+
+void print_and_highlight_extent(struct tu *tu, struct token *begin, struct token *end) {
+    if (begin == end) {
+        return print_and_highlight(tu->source, begin);
+    }
+
+    print_line(tu->source, begin->index, begin->line);
+
+    //if (begin->line != end->line) {
+    //     print_highlight(begin->column + 4, line_len(tu->source + begin->column) - begin->column);
+    // } else {
+        print_highlight(begin->column + 4, end->column + end->len - begin->column);
+    // }
 }
 
 void print_error(struct tu *tu, struct node *node, const char *format, ...) {
@@ -39,7 +67,8 @@ void print_error(struct tu *tu, struct node *node, const char *format, ...) {
     va_start(args, format);
 
     vfprintf(stderr, format, args);
-    print_and_highlight(tu->source, node->token);
+    fprintf(stderr, "\n");
+    print_and_highlight_extent(tu, node_begin(node), node_end(node));
 
     va_end(args);
 }

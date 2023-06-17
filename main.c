@@ -16,7 +16,7 @@ int main() {
     //                      "    return y << 3;\n"
     //                      "}\n";
     // const char *source = "a, b + 2 & c++, condition ? true : false";
-    // const char *source = "a = b, c |= d, 1 ? 2 : 3, -10, *a = b++, *a++, (*a)++, (2+2) * 12";
+    const char *source = "int f() { a = b, c |= d, 1 ? 2 : 3, -10, *a = b++, *a++, (*a)++, (2+2) * 12; }";
     // const char *source = "'\\\\', '\\'', '\\n', '\\t', -1, 2.2";
     // const char *source = "foo(a, b, c = 1)() && d[*a++]++";
     // const char *source = "sizeof(10), sizeof 10";
@@ -47,15 +47,7 @@ int main() {
     //                      "    }"
     //                      "    return a;"
     //                      "}";
-    const char *source = "int main() {"
-                         "  int x = 10;"
-                         "  while (1) {"
-                         "    if (1) {"
-                         "      x = 10;"
-                         "    } else {}"
-                         "  }"
-                         "  use(x);"
-                         "}";
+    // const char *source = "int main() { int x = 10; while (1) { if (1) { x = 10; } else {} } use(x); }";
 
     struct tu *tu = &(struct tu){
         .source = source,
@@ -65,7 +57,7 @@ int main() {
     };
 
     tokenize(tu);
-    print_tokens(tu);
+    // print_tokens(tu);
 
     parse(tu);
     print_ast(tu);
