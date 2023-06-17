@@ -56,17 +56,22 @@ int type(struct tu *tu) {
     return context->errors;
 }
 
-static void report_error(struct context *context, const char *message) {
-    fprintf(stderr, "typer error: %s\n", message);
-    context->errors += 1;
-    exit(1);
+static void report_error(struct context *context, const char *message, ...) {
+    va_list args;
+    va_start(args, message);
+
+    vprint_error_bare(context->tu, message, args);
+
+    va_end(args);
 }
 
-static void undeclared_identifier(struct context *context, struct node *node) {
-    struct tu *tu = context->tu;
+static void report_error_node(struct context *context, struct node *node, const char *message, ...) {
+    va_list args;
+    va_start(args, message);
 
-    fprintf(stderr, "error: ");
-    print_and_highlight(tu->source, node->token);
+    vprint_error(context->tu, node, message, args);
+
+    va_end(args);
 }
 
 static struct scope *new_scope(struct context *context) {
@@ -215,7 +220,7 @@ int find_or_create_type_inner(struct context *context, int typ, struct node *dec
         return find_or_create_type_inner(context, layer, decl->d.inner);
     }
     default:
-        report_error(context, "invalid declarator type");
+        report_error_node(context, decl, "invalid declarator type");
         return 0;
     }
 }
@@ -229,7 +234,7 @@ int find_or_create_type(struct context *context, struct node *type, struct node 
         }
     }
     if (b_type == -1) {
-        report_error(context, "invalid type name");
+        report_error_node(context, type, "invalid type name");
     }
 
     int typ = find_or_create(context, 0, b_type, 0);
@@ -274,19 +279,19 @@ int create_scope(struct context *context, int parent, int c_type, int depth, str
     return scope_id(context, scope);
 }
 
-bool name_exists(struct context *context, struct token *token, int scope_id) {
+struct scope *name_exists(struct context *context, struct token *token, int scope_id) {
     struct scope *scope = SCOPE(scope_id);
     int depth = scope->block_depth;
 
     while (scope->block_depth == depth && scope->token) {
         if (token_cmp(context, scope->token, token) == 0)
-            return true;
+            return scope;
 
         scope = SCOPE(scope->parent);
         if (!scope) break;
     }
 
-    return false;
+    return nullptr;
 }
 
 // Recursively resolve types and names on the AST.
@@ -303,8 +308,10 @@ int type_recur(struct context *context, struct node *node, int block_depth, int 
         struct node *base_type = node->decl.type;
         for (int i = 0; i < MAX_DECLARATORS && node->decl.declarators[i]; i += 1) {
             struct node *decl = node->decl.declarators[i];
-            if (name_exists(context, decl->d.name, scope)) {
-                report_error(context, "redefinition of name");
+            struct scope *before;
+            if ((before = name_exists(context, decl->d.name, scope))) {
+                report_error_node(context, node->decl.declarators[i], "redefinition of name");
+                print_info(context->tu, before->decl, "previous definition is here");
             }
             int type_id = find_or_create_type(context, base_type, decl);
             scope = create_scope(context, scope, type_id, block_depth, decl);
@@ -367,7 +374,7 @@ int type_recur(struct context *context, struct node *node, int block_depth, int 
     case NODE_IDENT: {
         int scope_id = resolve_name(context, node->token, scope);
         if (!scope_id) {
-            print_error(context->tu, node, "undeclared identifier");
+            report_error_node(context, node, "undeclared identifier");
             exit(1);
         }
         fprintf(stderr, "resolving %.*s (line %i) to ", node->token->len, TOKEN_STR(node->token), node->token->line);

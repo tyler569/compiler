@@ -9,8 +9,11 @@ struct tu;
 struct node;
 
 void print_and_highlight(const char *source, struct token *token);
+void print_error_bare(struct tu *tu, const char *format, ...);
 void print_error(struct tu *tu, struct node *node, const char *format, ...);
+void print_info(struct tu *tu, struct node *node, const char *format, ...);
 void print_error_token(struct tu *tu, struct token *token, const char *format, ...);
+void vprint_error_bare(struct tu *tu, const char *format, va_list);
 void vprint_error(struct tu *tu, struct node *node, const char *format, va_list);
 void vprint_error_token(struct tu *tu, struct token *token, const char *format, va_list);
 

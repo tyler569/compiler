@@ -321,7 +321,10 @@ struct token *node_end(struct node *node) {
     case NODE_BINARY_OP:
         return node_end(node->binop.rhs);
     case NODE_DECLARATOR:
-        return node_end(node->d.inner);
+        if (node->d.inner)
+            return node_end(node->d.inner);
+        else
+            return node->token;
     case NODE_TERNARY:
         return node_end(node->ternary.branch_false);
     default:

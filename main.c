@@ -47,7 +47,17 @@ int main() {
     //                      "    }"
     //                      "    return a;"
     //                      "}";
-    const char *source = "int main() { int x = 10; while (1) { if (1) { x = 10; } else {} } use(x); }";
+    const char *source = "int main() { \n"
+                         "  int x = 10;\n"
+                         "  while (1) {\n"
+                         "    if (1) {\n"
+                         "      x = 10;\n"
+                         "    } else {\n"
+                         "      int x = 1;\n"
+                         "    }\n"
+                         "  }\n"
+                         "  use(x);\n"
+                         "}\n";
 
     struct tu *tu = &(struct tu){
         .source = source,
