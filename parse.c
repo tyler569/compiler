@@ -4,6 +4,7 @@
 #include "diag.h"
 #include "tu.h"
 
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -29,8 +30,8 @@ struct context {
 static bool is_typename(struct context *, struct token *first, size_t count);
 static bool more_data(struct context *);
 static struct node *new(struct context *, enum node_type);
-static void report_error(struct context *, const char *message);
-static struct node *report_error_node(struct context *, const char *message);
+static void report_error(struct context *, const char *message, ...);
+static struct node *report_error_node(struct context *, const char *message, ...);
 static void pass(struct context *);
 static void eat(struct context *, int token_type, const char *function_name);
 
@@ -77,22 +78,30 @@ static struct node *new(struct context *context, enum node_type type) {
     return node;
 }
 
-static void report_error(struct context *context, const char *message) {
-    fprintf(stderr, "ast error: %s\n", message);
-    print_and_highlight(context->source, TOKEN(context));
+static void report_error(struct context *context, const char *message, ...) {
+    va_list args;
+    va_start(args, message);
+
+    vprint_error_token(context->tu, TOKEN(context), message, args);
+
     context->errors += 1;
 
-    if (context->tu->abort) exit(1);
+    va_end(args);
 }
 
-static struct node *report_error_node(struct context *context, const char *message) {
+static struct node *report_error_node(struct context *context, const char *message, ...) {
+    va_list args;
+    va_start(args, message);
+
     struct node *node = new(context, NODE_ERROR);
-    fprintf(stderr, "new error: %s\n", message);
-    print_and_highlight(context->source, TOKEN(context));
 
-    if (context->tu->abort) exit(1);
+    vprint_error(context->tu, node, message, args);
 
+    context->errors += 1;
     pass(context);
+
+    va_end(args);
+
     return node;
 }
 
@@ -105,12 +114,11 @@ static void pass(struct context *context) {
 // can be genericized.
 static void eat(struct context *context, int token_type, const char *function_name) {
     if (TOKEN(context)->type != token_type) {
-        char buffer[128];
-        snprintf(buffer, 128, "eat: expected '%s', found '%s' in %s",
-                 token_type_string(token_type),
-                 token_type_string(TOKEN(context)->type),
-                 function_name);
-        report_error(context, buffer);
+        print_error_token(context->tu, TOKEN(context),
+                          "expected '%s', found '%s' in %s",
+                          token_type_string(token_type),
+                          token_type_string(TOKEN(context)->type),
+                          function_name);
     }
     pass(context);
 }

@@ -6,13 +6,15 @@
 #include <stdio.h>
 #include <string.h>
 
+static void handle_error(struct tu *tu);
+
 static const char *safe_find_right(const char *base, const char *ptr, char c) {
     for (; *ptr != c && ptr != base; ptr -= 1) {
     }
     return ptr;
 }
 
-void print_line(const char *source, int position, int line_number) {
+static void print_line(const char *source, int position, int line_number) {
     if (line_number == 0) return;
 
     const char *start = safe_find_right(source, source + position, '\n');
@@ -48,7 +50,7 @@ void print_and_highlight(const char *source, struct token *token) {
     print_highlight(token->column + 4, token->len);
 }
 
-void print_and_highlight_extent(struct tu *tu, struct token *begin, struct token *end) {
+static void print_and_highlight_extent(struct tu *tu, struct token *begin, struct token *end) {
     if (begin == end) {
         return print_and_highlight(tu->source, begin);
     }
@@ -63,14 +65,56 @@ void print_and_highlight_extent(struct tu *tu, struct token *begin, struct token
     }
 }
 
+#define RED "\033[31m"
+#define RESET "\033[0m"
+
 void print_error(struct tu *tu, struct node *node, const char *format, ...) {
     va_list args;
     va_start(args, format);
 
-    fprintf(stderr, "\033[31merror\033[0m: ");
+    fprintf(stderr, RED "error" RESET ": ");
     vfprintf(stderr, format, args);
     fprintf(stderr, "\n");
     print_and_highlight_extent(tu, node_begin(node), node_end(node));
 
     va_end(args);
+
+    handle_error(tu);
+}
+
+void print_error_token(struct tu *tu, struct token *token, const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+
+    fprintf(stderr, RED "error" RESET ": ");
+    vfprintf(stderr, format, args);
+    fprintf(stderr, "\n");
+    print_and_highlight(tu->source, token);
+
+    va_end(args);
+
+    handle_error(tu);
+}
+
+void vprint_error(struct tu *tu, struct node *node, const char *format, va_list args) {
+    fprintf(stderr, RED "error" RESET ": ");
+    vfprintf(stderr, format, args);
+    fprintf(stderr, "\n");
+    print_and_highlight_extent(tu, node_begin(node), node_end(node));
+
+    handle_error(tu);
+}
+
+void vprint_error_token(struct tu *tu, struct token *token, const char *format, va_list args) {
+    fprintf(stderr, RED "error" RESET ": ");
+    vfprintf(stderr, format, args);
+    fprintf(stderr, "\n");
+    print_and_highlight(tu->source, token);
+
+    handle_error(tu);
+}
+
+static void handle_error(struct tu *tu) {
+    fprintf(stderr, "Too many errors, aborting\n");
+    if (tu->abort) exit(1);
 }
