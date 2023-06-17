@@ -128,4 +128,7 @@ struct tu;
 int parse(struct tu *);
 void print_ast(struct tu *);
 
+struct token *node_begin(struct node *);
+struct token *node_end(struct node *);
+
 #endif //COMPILER_PARSE_H

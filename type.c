@@ -3,6 +3,7 @@
 #include "token.h"
 #include "parse.h"
 #include "util.h"
+#include "diag.h"
 
 #include <assert.h>
 #include <stdlib.h>
@@ -59,6 +60,13 @@ static void report_error(struct context *context, const char *message) {
     fprintf(stderr, "typer error: %s\n", message);
     context->errors += 1;
     exit(1);
+}
+
+static void undeclared_identifier(struct context *context, struct node *node) {
+    struct tu *tu = context->tu;
+
+    fprintf(stderr, "error: ");
+    print_and_highlight(tu->source, node->token);
 }
 
 static struct scope *new_scope(struct context *context) {

@@ -36,39 +36,36 @@ enum ir_op : char {
     PHI,    // r0 <- phi [ r1, r2 ]
 };
 
-typedef list(struct ir_reg) phi_list_t;
+typedef list(struct ir_instr) ir_list_t;
+typedef list(struct bb *) bb_list_t;
+typedef list(struct ir_reg *) reg_list_t;
 
 struct ir_reg {
-    union {
-        struct scope *scope;
-        const char *label;
-    };
-    phi_list_t phi_list;
+    struct scope *scope;
+    reg_list_t phi_list;
+    reg_list_t phi_dependants;
+    struct bb *bb;
     short index;
     bool is_phi;
 };
 
 struct ir_instr {
-    union {
-        // struct token *name;
-        const char *name;
-        uint64_t immediate_i;
-        double immediate_f;
-    };
-    struct ir_reg r[3];
+    const char *name;
+    uint64_t immediate_i;
+    double immediate_f;
+    reg_list_t args;
+    struct ir_reg *r[3];
     enum ir_op op;
 };
 
-typedef list(struct ir_instr) ir_list_t;
-typedef list(struct bb *) bb_list_t;
-typedef list(struct ir_reg) reg_list_t;
-
 struct bb {
     const char *name;
+    struct function *function;
     ir_list_t ir_list;
     bb_list_t inputs;
     bb_list_t outputs;
-    reg_list_t owned_registers;
+    reg_list_t owned_vars;
+    reg_list_t incomplete_phis;
     bool filled;
     bool sealed;
 };

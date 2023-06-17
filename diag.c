@@ -1,6 +1,8 @@
 #include "diag.h"
 #include "token.h"
+#include "tu.h"
 
+#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -30,4 +32,14 @@ void print_and_highlight(const char *source, struct token *token) {
     fputc('^', stderr);
     for (int i = 1; i < token->len; i += 1) fputc('~', stderr);
     fputc('\n', stderr);
+}
+
+void print_error(struct tu *tu, struct node *node, const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+
+    vfprintf(stderr, format, args);
+    print_and_highlight(tu->source, node->token);
+
+    va_end(args);
 }

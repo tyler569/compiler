@@ -36,16 +36,25 @@ int main() {
     //                      // "    a = b ? a : b;\n"
     //                      "    return a;\n"
     //                      "}\n";
-    const char *source = "int foo(bool b) {"
-                         "    int a = 1;"
-                         "    while (a + 3) {"
-                         "        if (b) {"
-                         "            a = 2;"
-                         "        } else {"
-                         "            a = 3;"
-                         "        }"
-                         "    }"
-                         "    return a;"
+    // const char *source = "int foo(bool b) {"
+    //                      "    int a = 1;"
+    //                      "    while (a + 3) {"
+    //                      "        if (b) {"
+    //                      "            a = 2;"
+    //                      "        } else {"
+    //                      "            a = 3;"
+    //                      "        }"
+    //                      "    }"
+    //                      "    return a;"
+    //                      "}";
+    const char *source = "int main() {"
+                         "  int x = 10;"
+                         "  while (1) {"
+                         "    if (1) {"
+                         "      x = 10;"
+                         "    } else {}"
+                         "  }"
+                         "  use(x);"
                          "}";
 
     struct tu *tu = &(struct tu){
@@ -65,9 +74,9 @@ int main() {
 
     fprintf(stderr, "\n");
 
-    emit(tu);
+    // emit(tu);
 
-    for (int i = 0; i < tu->ir_len; i += 1) {
-        print_ir_instr(tu, &tu->ir[i]);
-    }
+    // for (int i = 0; i < tu->ir_len; i += 1) {
+    //     print_ir_instr(tu, &tu->ir[i]);
+    // }
 }
