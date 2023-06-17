@@ -124,8 +124,6 @@ static void print_space(int level) {
 #define RECUR(node) print_ast_recursive(nullptr, tu, (node), level + 1)
 #define RECUR_INFO(info, node) print_ast_recursive((info), tu, (node), level + 1)
 static void print_ast_recursive(const char *info, struct tu *tu, struct node *node, int level) {
-    print_error(tu, node, "testing");
-
     if (level > 20) exit(1);
     print_space(level);
     if (info) printf("%s ", info);

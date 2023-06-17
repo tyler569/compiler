@@ -246,7 +246,7 @@ int token_cmp(struct context *context, struct token *a, struct token *b) {
 int resolve_name(struct context *context, struct token *token, int sc) {
     struct scope *scope = SCOPE(sc);
 
-    while (scope) {
+    while (scope && scope->token) {
         if (token_cmp(context, token, scope->token) == 0) {
             return scope_id(context, scope);
         }
@@ -367,7 +367,8 @@ int type_recur(struct context *context, struct node *node, int block_depth, int 
     case NODE_IDENT: {
         int scope_id = resolve_name(context, node->token, scope);
         if (!scope_id) {
-            report_error(context, "undefined identifier");
+            print_error(context->tu, node, "undeclared identifier");
+            exit(1);
         }
         fprintf(stderr, "resolving %.*s (line %i) to ", node->token->len, TOKEN_STR(node->token), node->token->line);
         print_type(context, SCOPE(scope_id)->c_type);

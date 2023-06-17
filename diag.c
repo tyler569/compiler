@@ -67,6 +67,7 @@ void print_error(struct tu *tu, struct node *node, const char *format, ...) {
     va_list args;
     va_start(args, format);
 
+    fprintf(stderr, "\033[31merror\033[0m: ");
     vfprintf(stderr, format, args);
     fprintf(stderr, "\n");
     print_and_highlight_extent(tu, node_begin(node), node_end(node));
