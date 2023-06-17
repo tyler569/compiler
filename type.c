@@ -279,9 +279,8 @@ int create_scope(struct context *context, int parent, int c_type, int depth, str
     return scope_id(context, scope);
 }
 
-struct scope *name_exists(struct context *context, struct token *token, int scope_id) {
+struct scope *name_exists(struct context *context, struct token *token, int scope_id, int depth) {
     struct scope *scope = SCOPE(scope_id);
-    int depth = scope->block_depth;
 
     while (scope->block_depth == depth && scope->token) {
         if (token_cmp(context, scope->token, token) == 0)
@@ -309,7 +308,7 @@ int type_recur(struct context *context, struct node *node, int block_depth, int 
         for (int i = 0; i < MAX_DECLARATORS && node->decl.declarators[i]; i += 1) {
             struct node *decl = node->decl.declarators[i];
             struct scope *before;
-            if ((before = name_exists(context, decl->d.name, scope))) {
+            if ((before = name_exists(context, decl->d.name, scope, block_depth))) {
                 report_error_node(context, node->decl.declarators[i], "redefinition of name");
                 print_info(context->tu, before->decl, "previous definition is here");
             }

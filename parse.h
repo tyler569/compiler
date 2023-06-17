@@ -44,6 +44,7 @@ struct node {
     struct token *token;
     struct token *token_end;
     enum node_type type;
+    int c_type;
     union {
         struct {
             struct node *children[MAX_BLOCK_MEMBERS];
