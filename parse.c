@@ -59,7 +59,7 @@ int parse(struct tu *tu) {
         list_push(&root->root.children, parse_external_definition(context));
     }
 
-    tu->nodes = root;
+    tu->ast_root = root;
 
     return context->errors;
 }
@@ -123,6 +123,9 @@ static void eat(struct context *context, int token_type, const char *function_na
     pass(context);
 }
 
+static void fast_forward(struct context *context, int token_type) {
+}
+
 #define eat(ctx, typ) eat(ctx, typ, __func__)
 
 static void print_space(int level) {
@@ -132,9 +135,20 @@ static void print_space(int level) {
 #define RECUR(node) print_ast_recursive(nullptr, tu, (node), level + 1)
 #define RECUR_INFO(info, node) print_ast_recursive((info), tu, (node), level + 1)
 static void print_ast_recursive(const char *info, struct tu *tu, struct node *node, int level) {
-    if (level > 20) exit(1);
     print_space(level);
     if (info) fprintf(stderr, "%s ", info);
+    if (!node) {
+        fprintf(stderr, "(node *)nullptr\n");
+        return;
+    }
+    if (level > 50) {
+        fprintf(stderr, ">50 levels, loop?\n");
+        exit(1);
+    }
+    if (node == tu->ast_root && level > 0) {
+        fprintf(stderr, "root, loop!\n");
+        exit(1);
+    }
 
     struct token *token = node->token;
     const char *source = tu->source;
@@ -343,7 +357,7 @@ static void print_ast_recursive(const char *info, struct tu *tu, struct node *no
 #undef RECUR_INFO
 
 void print_ast(struct tu *tu) {
-    print_ast_recursive(nullptr, tu, tu->nodes, 0);
+    print_ast_recursive(nullptr, tu, tu->ast_root, 0);
 }
 
 struct token *node_begin(struct node *node) {

@@ -42,7 +42,7 @@ static struct scope *new_scope(struct context *context);
 int type(struct tu *tu) {
     struct context *context = &(struct context) {
         .tu = tu,
-        .root = tu->nodes,
+        .root = tu->ast_root,
     };
 
     // discard index 0, so it can be used for "none"

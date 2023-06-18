@@ -177,7 +177,7 @@ struct function *new_function();
 int emit(struct tu *tu) {
     struct function *function = new_function();
 
-    bb_emit_node(tu, function, tu->nodes, false);
+    bb_emit_node(tu, function, tu->ast_root, false);
 
     for_each (&function->bbs) {
         fprintf(stderr, "\nnew bb:\n");

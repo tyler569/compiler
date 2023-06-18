@@ -25,7 +25,7 @@ do {                        \
 #define list_push(list, value) \
 do {                           \
     if ((list)->len <= (list)->cap) {                                            \
-        size_t new_len = (list)->cap ? (list)->cap * 2 : 128;                    \
+        size_t new_len = (list)->cap ? (list)->cap * 2 : 16;                     \
         (list)->data = realloc((list)->data, new_len * sizeof((list)->data[0])); \
         (list)->cap = new_len;                                                   \
     }                                    \

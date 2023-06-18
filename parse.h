@@ -5,6 +5,7 @@
 #include "list.h"
 
 enum node_type {
+    NODE_NULL,
     NODE_ROOT,
     NODE_BINARY_OP,
     NODE_UNARY_OP,
@@ -38,8 +39,6 @@ enum node_type {
     NODE_BREAK,
     NODE_CONTINUE,
     NODE_DEFAULT,
-    NODE_NULL,
-
     NODE_STRUCT,
     NODE_ENUM,
     NODE_UNION,

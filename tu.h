@@ -4,10 +4,14 @@
 
 #include <stdlib.h>
 
-struct token;
-struct node;
-struct ir_instr;
-struct scope;
+#include "list.h"
+#include "token.h"
+#include "parse.h"
+#include "type.h"
+
+typedef list(struct token) token_list_t;
+typedef list(struct scope) scope_list_t;
+typedef list(struct function) function_list_t;
 
 struct tu {
     const char *filename;
@@ -18,14 +22,11 @@ struct tu {
     struct token *tokens;
     size_t tokens_len;
 
-    struct node *nodes;
-    size_t nodes_len;
-
+    struct node *ast_root;
     struct scope *scopes;
     size_t scopes_len;
 
-    struct ir_instr *ir;
-    size_t ir_len;
+    function_list_t functions;
 
     struct {
         int capacity;
