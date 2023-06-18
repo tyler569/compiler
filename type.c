@@ -60,7 +60,7 @@ static void report_error(struct context *context, const char *message, ...) {
     va_list args;
     va_start(args, message);
 
-    vprint_error_bare(context->tu, message, args);
+    vprint_error(context->tu, message, args);
 
     va_end(args);
 }
@@ -69,7 +69,7 @@ static void report_error_node(struct context *context, struct node *node, const 
     va_list args;
     va_start(args, message);
 
-    vprint_error(context->tu, node, message, args);
+    vprint_error_node(context->tu, node, message, args);
 
     va_end(args);
 }
@@ -310,7 +310,7 @@ int type_recur(struct context *context, struct node *node, int block_depth, int 
             struct scope *before;
             if ((before = name_exists(context, decl->d.name, scope, block_depth))) {
                 report_error_node(context, node->decl.declarators[i], "redefinition of name");
-                print_info(context->tu, before->decl, "previous definition is here");
+                print_info_node(context->tu, before->decl, "previous definition is here");
             }
             int type_id = find_or_create_type(context, base_type, decl);
             scope = create_scope(context, scope, type_id, block_depth, decl);

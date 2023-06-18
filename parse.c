@@ -95,7 +95,7 @@ static struct node *report_error_node(struct context *context, const char *messa
 
     struct node *node = new(context, NODE_ERROR);
 
-    vprint_error(context->tu, node, message, args);
+    vprint_error_node(context->tu, node, message, args);
 
     context->errors += 1;
     pass(context);
@@ -126,7 +126,7 @@ static void eat(struct context *context, int token_type, const char *function_na
 #define eat(ctx, typ) eat(ctx, typ, __func__)
 
 static void print_space(int level) {
-    for (int i = 0; i < level; i++) fputs("  ", stdout);
+    for (int i = 0; i < level; i++) fputs("  ", stderr);
 }
 
 #define RECUR(node) print_ast_recursive(nullptr, tu, (node), level + 1)
@@ -134,69 +134,72 @@ static void print_space(int level) {
 static void print_ast_recursive(const char *info, struct tu *tu, struct node *node, int level) {
     if (level > 20) exit(1);
     print_space(level);
-    if (info) printf("%s ", info);
+    if (info) fprintf(stderr, "%s ", info);
 
     struct token *token = node->token;
     const char *source = tu->source;
 
     switch (node->type) {
     case NODE_ROOT: {
-        printf("root:\n");
+        fprintf(stderr, "root:\n");
         for (int i = 0; i < MAX_BLOCK_MEMBERS && node->root.children[i]; i++) {
             RECUR(node->root.children[i]);
         }
         break;
     }
     case NODE_BLOCK: {
-        printf("block:\n");
+        fprintf(stderr, "block:\n");
         for (int i = 0; i < MAX_BLOCK_MEMBERS && node->block.children[i]; i++) {
             RECUR(node->block.children[i]);
         }
         break;
     }
     case NODE_INT_LITERAL: {
-        printf("int: %.*s (%llu)\n", token->len, &source[token->index], token->int_.value);
+        fprintf(stderr, "int: %.*s (%llu)\n", token->len, &source[token->index], token->int_.value);
         break;
     }
     case NODE_FLOAT_LITERAL: {
-        printf("float: %.*s (%f)\n", token->len, &source[token->index], token->float_.value);
+        fprintf(stderr, "float: %.*s (%f)\n", token->len, &source[token->index], token->float_.value);
         break;
     }
+    case NODE_STRING_LITERAL:
+        fprintf(stderr, "string: %.*s\n", token->len, &source[token->index]);
+        break;
     case NODE_IDENT: {
-        printf("ident: %.*s\n", token->len, &source[token->index]);
+        fprintf(stderr, "ident: %.*s\n", token->len, &source[token->index]);
         break;
     }
     case NODE_BINARY_OP: {
-        printf("binop: %.*s\n", token->len, &source[token->index]);
+        fprintf(stderr, "binop: %.*s\n", token->len, &source[token->index]);
         RECUR(node->binop.lhs);
         RECUR(node->binop.rhs);
         break;
     }
     case NODE_UNARY_OP: {
-        printf("unop: %.*s\n", token->len, &source[token->index]);
+        fprintf(stderr, "unop: %.*s\n", token->len, &source[token->index]);
         RECUR(node->unary_op.inner);
         break;
     }
     case NODE_POSTFIX_OP: {
-        printf("postfix: %.*s\n", token->len, &source[token->index]);
+        fprintf(stderr, "postfix: %.*s\n", token->len, &source[token->index]);
         RECUR(node->unary_op.inner);
         break;
     }
     case NODE_SUBSCRIPT: {
-        printf("subscript:\n");
+        fprintf(stderr, "subscript:\n");
         RECUR_INFO("arr:", node->subscript.inner);
         RECUR_INFO("sub:", node->subscript.subscript);
         break;
     }
     case NODE_TERNARY: {
-        printf("ternary:\n");
+        fprintf(stderr, "ternary:\n");
         RECUR_INFO("cnd:", node->ternary.condition);
         RECUR_INFO("tru:", node->ternary.branch_true);
         RECUR_INFO("fls:", node->ternary.branch_false);
         break;
     }
     case NODE_FUNCTION_CALL: {
-        printf("funcall:\n");
+        fprintf(stderr, "funcall:\n");
         RECUR_INFO("fun:", node->funcall.inner);
         for (int i = 0; i < MAX_FUNCTION_ARGS && node->funcall.args[i] != 0; i += 1) {
             RECUR_INFO("arg", node->funcall.args[i]);
@@ -204,7 +207,7 @@ static void print_ast_recursive(const char *info, struct tu *tu, struct node *no
         break;
     }
     case NODE_DECLARATION: {
-        printf("decl:\n");
+        fprintf(stderr, "decl:\n");
         RECUR_INFO("typ:", node->decl.type);
         for (int i = 0; i < MAX_DECLARATORS && node->decl.declarators[i] != 0; i += 1) {
             RECUR_INFO("dcl:", node->decl.declarators[i]);
@@ -212,29 +215,29 @@ static void print_ast_recursive(const char *info, struct tu *tu, struct node *no
         break;
     }
     case NODE_TYPE_SPECIFIER: {
-        printf("type: %.*s\n", token->len, &source[token->index]);
+        fprintf(stderr, "type: %.*s\n", token->len, &source[token->index]);
         break;
     }
     case NODE_DECLARATOR:
     case NODE_FUNCTION_DECLARATOR:
     case NODE_ARRAY_DECLARATOR: {
-        printf("d: ");
+        fprintf(stderr, "d: ");
         struct node *n = node;
         while (true) {
             token = n->token;
             if (n->type == NODE_DECLARATOR) {
-                printf("%.*s", token->len, &source[token->index]);
+                fprintf(stderr, "%.*s", token->len, &source[token->index]);
             } else if (n->type == NODE_FUNCTION_DECLARATOR) {
-                printf("()");
+                fprintf(stderr, "()");
             } else if (n->type == NODE_ARRAY_DECLARATOR) {
-                printf("[]");
+                fprintf(stderr, "[]");
             }
 
             if (!n->d.inner) {
-                printf("\n");
+                fprintf(stderr, "\n");
                 break;
             }
-            printf(" -> ");
+            fprintf(stderr, " -> ");
             n = n->d.inner;
         }
         if (node->d.initializer)
@@ -242,79 +245,85 @@ static void print_ast_recursive(const char *info, struct tu *tu, struct node *no
         break;
     }
     case NODE_STATIC_ASSERT: {
-        printf("static assert:\n");
+        fprintf(stderr, "static assert:\n");
         RECUR_INFO("tst:", node->st_assert.expr);
         if (node->st_assert.message)
             RECUR_INFO("msg:", node->st_assert.message);
         break;
     }
     case NODE_FUNCTION_DEFINITION: {
-        printf("function:\n");
+        fprintf(stderr, "function:\n");
         RECUR_INFO("typ:", node->fun.decl);
         RECUR_INFO("bdy:", node->fun.body);
         break;
     }
     case NODE_RETURN:
-        printf("return:\n");
+        fprintf(stderr, "return:\n");
         RECUR(node->ret.expr);
         break;
     case NODE_IF:
-        printf("if:\n");
+        fprintf(stderr, "if:\n");
         RECUR_INFO("cnd:", node->if_.cond);
         RECUR_INFO("yes:", node->if_.block_true);
         if (node->if_.block_false)
-            RECUR_INFO(" no:", node->if_.block_false);
+            RECUR_INFO("no: ", node->if_.block_false);
         break;
     case NODE_WHILE:
-        printf("while:\n");
+        fprintf(stderr, "while:\n");
         RECUR_INFO("cnd:", node->while_.cond);
         RECUR_INFO("blk:", node->while_.block);
         break;
     case NODE_NULL:
-        printf("null:\n");
+        fprintf(stderr, "null:\n");
         break;
     case NODE_ERROR:
-        printf("error: %.*s\n", token->len, &source[token->index]);
-        break;
-    case NODE_STRING_LITERAL:
-        printf("string literal:\n");
+        fprintf(stderr, "error: %.*s\n", token->len, &source[token->index]);
         break;
     case NODE_MEMBER:
-        printf("member:\n");
+        fprintf(stderr, "member:\n");
         RECUR_INFO("val:", node->member.inner);
         RECUR_INFO("nam:", node->member.ident);
         break;
     case NODE_LABEL:
-        printf("label:\n");
+        fprintf(stderr, "label:\n");
         RECUR(node->label.name);
         break;
     case NODE_DO:
-        printf("do:\n");
+        fprintf(stderr, "do:\n");
         RECUR_INFO("blk:", node->do_.block);
         RECUR_INFO("cnd:", node->do_.cond);
         break;
     case NODE_FOR:
-        printf("for:\n");
+        fprintf(stderr, "for:\n");
         RECUR_INFO("ini:", node->for_.init);
         RECUR_INFO("cnd:", node->for_.cond);
         RECUR_INFO("nxt:", node->for_.next);
         RECUR_INFO("blk:", node->for_.block);
         break;
     case NODE_GOTO:
-        printf("goto:\n");
+        fprintf(stderr, "goto:\n");
         RECUR(node->goto_.label);
         break;
     case NODE_SWITCH:
-        printf("switch:\n");
+        fprintf(stderr, "switch:\n");
         RECUR_INFO("exp:", node->switch_.expr);
         RECUR_INFO("blk:", node->switch_.block);
         break;
     case NODE_CASE:
-        printf("case:\n");
+        fprintf(stderr, "case:\n");
         RECUR(node->case_.value);
         break;
     case NODE_CONTINUE:
-        printf("continue:\n");
+        fprintf(stderr, "continue:\n");
+        break;
+    case NODE_BREAK:
+        fprintf(stderr, "break:\n");
+        break;
+    case NODE_DEFAULT:
+        fprintf(stderr, "default:\n");
+        break;
+    default:
+        fprintf(stderr, "UNKNOWN:\n");
         break;
     }
 }
@@ -374,7 +383,7 @@ static struct node *parse_ident(struct context *context) {
     if (TOKEN(context)->type != TOKEN_IDENT)
         return report_error_node(context, "expected an ident, but didn't find it");
     struct node *node = new(context, NODE_IDENT);
-    pass(context);
+    eat(context, TOKEN_IDENT);
     return node;
 }
 
@@ -911,7 +920,7 @@ static struct node *parse_case_statement(struct context *context) {
 
 static struct node *parse_goto_statement(struct context *context) {
     struct node *node = new(context, NODE_GOTO);
-    eat(context, NODE_GOTO);
+    eat(context, TOKEN_GOTO);
     struct node *ident = parse_ident(context);
     eat(context, ';');
     node->goto_.label = ident;
@@ -919,7 +928,7 @@ static struct node *parse_goto_statement(struct context *context) {
 }
 
 static struct node *parse_break_statement(struct context *context) {
-    struct node *node = new(context, NODE_GOTO);
+    struct node *node = new(context, NODE_BREAK);
     eat(context, TOKEN_BREAK);
     eat(context, ';');
     return node;
@@ -929,6 +938,13 @@ static struct node *parse_continue_statement(struct context *context) {
     struct node *node = new(context, NODE_CONTINUE);
     eat(context, TOKEN_CONTINUE);
     eat(context, ';');
+    return node;
+}
+
+static struct node *parse_default_statement(struct context *context) {
+    struct node *node = new(context, NODE_DEFAULT);
+    eat(context, TOKEN_DEFAULT);
+    eat(context, ':');
     return node;
 }
 
@@ -967,6 +983,8 @@ static struct node *parse_statement(struct context *context) {
         return parse_break_statement(context);
     case TOKEN_CONTINUE:
         return parse_continue_statement(context);
+    case TOKEN_DEFAULT:
+        return parse_default_statement(context);
     }
 
     if (is_bare_type_specifier(TOKEN(context)))

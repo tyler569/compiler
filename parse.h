@@ -35,7 +35,9 @@ enum node_type {
     NODE_GOTO,
     NODE_SWITCH,
     NODE_CASE,
+    NODE_BREAK,
     NODE_CONTINUE,
+    NODE_DEFAULT,
     NODE_NULL,
 };
 

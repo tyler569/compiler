@@ -69,7 +69,7 @@ static void print_and_highlight_extent(struct tu *tu, struct token *begin, struc
 #define BLUE "\033[94m"
 #define RESET "\033[0m"
 
-void print_error_bare(struct tu *tu, const char *format, ...) {
+void print_error(struct tu *tu, const char *format, ...) {
     va_list args;
     va_start(args, format);
 
@@ -82,7 +82,7 @@ void print_error_bare(struct tu *tu, const char *format, ...) {
     handle_error(tu);
 }
 
-void print_error(struct tu *tu, struct node *node, const char *format, ...) {
+void print_error_node(struct tu *tu, struct node *node, const char *format, ...) {
     va_list args;
     va_start(args, format);
 
@@ -96,7 +96,7 @@ void print_error(struct tu *tu, struct node *node, const char *format, ...) {
     handle_error(tu);
 }
 
-void print_info(struct tu *tu, struct node *node, const char *format, ...) {
+void print_info_node(struct tu *tu, struct node *node, const char *format, ...) {
     va_list args;
     va_start(args, format);
 
@@ -124,7 +124,7 @@ void print_error_token(struct tu *tu, struct token *token, const char *format, .
     handle_error(tu);
 }
 
-void vprint_error_bare(struct tu *tu, const char *format, va_list args) {
+void vprint_error(struct tu *tu, const char *format, va_list args) {
     fprintf(stderr, RED "error" RESET ": ");
     vfprintf(stderr, format, args);
     fprintf(stderr, "\n");
@@ -132,7 +132,7 @@ void vprint_error_bare(struct tu *tu, const char *format, va_list args) {
     handle_error(tu);
 }
 
-void vprint_error(struct tu *tu, struct node *node, const char *format, va_list args) {
+void vprint_error_node(struct tu *tu, struct node *node, const char *format, va_list args) {
     fprintf(stderr, RED "error" RESET ": ");
     vfprintf(stderr, format, args);
     fprintf(stderr, "\n");
@@ -148,6 +148,19 @@ void vprint_error_token(struct tu *tu, struct token *token, const char *format, 
     print_and_highlight(tu->source, token);
 
     handle_error(tu);
+}
+
+void error_abort(struct tu *tu, const char *message, ...) {
+    va_list args;
+    va_start(args, format);
+
+    fprintf(stderr, RED "error" RESET ": ");
+    vfprintf(stderr, message, args);
+    fprintf(stderr, "\n");
+
+    va_end(args);
+
+    exit(1);
 }
 
 static void handle_error(struct tu *tu) {

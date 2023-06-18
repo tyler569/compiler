@@ -1,6 +1,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <stddef.h>
+#include <sys/stat.h>
+#include <getopt.h>
+#include <fcntl.h>
+#include <errno.h>
 
 #include "diag.h"
 #include "token.h"
@@ -9,73 +13,37 @@
 #include "type.h"
 #include "ir.h"
 
-int main() {
-    // const char *source = "int y = 0, *x = &y;\n"
-    //                      "int foo(int bar, int *baz) {\n"
-    //                      "    int x = 10;\n"
-    //                      "    return y << 3;\n"
-    //                      "}\n";
-    // const char *source = "a, b + 2 & c++, condition ? true : false";
-    // const char *source = "int f() { a = b, c |= d, 1 ? 2 : 3, -10, *a = b++, *a++, (*a)++, (2+2) * 12; }";
-    // const char *source = "'\\\\', '\\'', '\\n', '\\t', -1, 2.2";
-    // const char *source = "foo(a, b, c = 1)() && d[*a++]++";
-    // const char *source = "sizeof(10), sizeof 10";
-    // const char *source = "int a, *b, c[], d(), *e(), (*f)(), g[100];\n"
-    //                      "static_assert(x == 10, \"message\");\n"
-    //                      "a += *b;";
-    // const char *source = "int foo(int, char, signed);";
-    // const char *source = "int (*foo)(); int (*bar())();";
-    // const char *source = "int main(int a, int b) {\na = b; int c = a; int d = c; return 0; }\nint a = main;";
-    // const char *source = "int main() {\n"
-    //                      "    int a, b;\n"
-    //                      "    a = 1;\n"
-    //                      "    b = 2;\n"
-    //                      "    if (a == b) {\n"
-    //                      "        a = 10;\n"
-    //                      "    }\n"
-    //                      // "    a = b ? a : b;\n"
-    //                      "    return a;\n"
-    //                      "}\n";
-    // const char *source = "int foo(bool b) {"
-    //                      "    int a = 1;"
-    //                      "    while (a + 3) {"
-    //                      "        if (b) {"
-    //                      "            a = 2;"
-    //                      "        } else {"
-    //                      "            a = 3;"
-    //                      "        }"
-    //                      "    }"
-    //                      "    return a;"
-    //                      "}";
-    // const char *source = "int main() { \n"
-    //                      "  int x = 10;\n"
-    //                      "  while (1) {\n"
-    //                      "    if (1) {\n"
-    //                      "      x = 10;\n"
-    //                      "    } else {\n"
-    //                      "      int x = 1;\n"
-    //                      "    }\n"
-    //                      "  }\n"
-    //                      "  use(x);\n"
-    //                      "}\n";
-    const char *source = "int main() {"
-                         "  switch(1) {"
-                         "  case 1:"
-                         "    if (foo) {"
-                         "  label:"
-                         "  case 2:"
-                         "      2;"
-                         "    }"
-                         "  }"
-                         "  do 1; while (3);"
-                         "}";
-
+int main(int argc, char **argv) {
     struct tu *tu = &(struct tu){
-        .source = source,
-        .filename = "",
-        .source_len = strlen(source),
         .abort = false // true,
     };
+
+    if (argc < 2) {
+        tu->source = "int main() {}";
+        tu->source_len = strlen(tu->source);
+    } else {
+        int file = open(argv[1], O_RDONLY);
+        if (file < 0) {
+            print_error(tu, "unable to open file %s (%s)", argv[1], strerror(errno));
+            return 1;
+        }
+        struct stat stat;
+        int err = fstat(file, &stat);
+        if (err < 0) {
+            error_abort(tu, "unable to stat file %s (%s)", argv[1], strerror(errno));
+        }
+        char *s = malloc(stat.st_size + 1);
+        if (!s) {
+            error_abort(tu, "unable to allocate memory %s (%s)", argv[1], strerror(errno));
+        }
+        s[stat.st_size] = 0;
+        err = read(file, s, stat.st_size);
+        if (err < 0) {
+            error_abort(tu, "unable to stat file %s (%s)", argv[1], strerror(errno));
+        }
+        tu->source = s;
+        tu->source_len = stat.st_size;
+    }
 
     tokenize(tu);
     // print_tokens(tu);

@@ -517,6 +517,8 @@ const char *token_type_string(int token_type) {
     case '|': return "|";
     case '~': return "~";
     case ',': return ",";
+    case ':': return ":";
+    case ';': return ";";
 #define CASE(tt, str) case (tt): return str;
     CASE(TOKEN_NULL, "null")
     CASE(TOKEN_IDENT, "ident")
