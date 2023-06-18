@@ -328,6 +328,12 @@ static void print_ast_recursive(const char *info, struct tu *tu, struct node *no
             RECUR(*it);
         }
         break;
+    case NODE_UNION:
+        fprintf(stderr, "union:\n");
+        for_each (&node->struct_.decls) {
+            RECUR(*it);
+        }
+        break;
     default:
         fprintf(stderr, "UNKNOWN:\n");
         break;
@@ -625,12 +631,18 @@ static bool begins_type_name(struct context *context, struct token *token) {
     //     is_bare_type_specifier(token) ||
     //     is_function_specifier(token) ||
     //     is_typedef(context, token);
-    return is_bare_type_specifier(token) || token->type == TOKEN_STRUCT;
+    return is_bare_type_specifier(token) || token->type == TOKEN_STRUCT || token->type == TOKEN_UNION;
 }
 
 static struct node *parse_struct(struct context *context) {
-    struct node *node = new(context, NODE_STRUCT);
-    eat(context, TOKEN_STRUCT);
+    struct node *node;
+    if (TOKEN(context)->type == TOKEN_STRUCT)
+        node = new(context, NODE_STRUCT);
+    else if (TOKEN(context)->type == TOKEN_UNION)
+        node = new(context, NODE_UNION);
+    else return report_error_node(context, "not a struct");
+    pass(context);
+
     if (TOKEN(context)->type == TOKEN_IDENT) {
         struct node *name = parse_ident(context);
         node->struct_.name = name;
@@ -656,7 +668,7 @@ static struct node *parse_type_specifier(struct context *context) {
         struct node *node = new(context, NODE_TYPE_SPECIFIER);
         pass(context);
         return node;
-    } else if (TOKEN(context)->type == TOKEN_STRUCT) {
+    } else if (TOKEN(context)->type == TOKEN_STRUCT || TOKEN(context)->type == TOKEN_UNION) {
         return parse_struct(context);
     } else {
         return report_error_node(context, "non-basic type specifiers are not yet supported");
