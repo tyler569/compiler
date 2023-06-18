@@ -305,11 +305,11 @@ int type_recur(struct context *context, struct node *node, int block_depth, int 
     switch (node->type) {
     case NODE_DECLARATION: {
         struct node *base_type = node->decl.type;
-        for (int i = 0; i < MAX_DECLARATORS && node->decl.declarators[i]; i += 1) {
-            struct node *decl = node->decl.declarators[i];
+        for_each (&node->decl.declarators) {
+            struct node *decl = *it;
             struct scope *before;
             if ((before = name_exists(context, decl->d.name, scope, block_depth))) {
-                report_error_node(context, node->decl.declarators[i], "redefinition of name");
+                report_error_node(context, decl, "redefinition of name");
                 print_info_node(context->tu, before->decl, "previous definition is here");
             }
             int type_id = find_or_create_type(context, base_type, decl);
@@ -324,23 +324,23 @@ int type_recur(struct context *context, struct node *node, int block_depth, int 
         return scope;
     }
     case NODE_ROOT:
-        for (int i = 0; i < MAX_BLOCK_MEMBERS && node->root.children[i]; i++) {
-            int s = type_recur(context, node->root.children[i], block_depth, scope);
+        for_each (&node->root.children) {
+            int s = type_recur(context, *it, block_depth, scope);
             if (s) scope = s;
         }
         return 0;
     case NODE_BLOCK:
-        for (int i = 0; i < MAX_BLOCK_MEMBERS && node->block.children[i]; i++) {
-            int s = type_recur(context, node->block.children[i], block_depth + 1, scope);
+        for_each (&node->block.children) {
+            int s = type_recur(context, *it, block_depth + 1, scope);
             if (s) scope = s;
         }
         return 0;
     case NODE_FUNCTION_DEFINITION: {
         int new_outer = type_recur(context, node->fun.decl, block_depth, scope);
         struct node *n = node->fun.decl;
-        struct node *d = n->decl.declarators[0];
-        for (int i = 0; i < MAX_FUNCTION_ARGS && d->d.fun.args[i]; i += 1) {
-            int s = type_recur(context, d->d.fun.args[i], block_depth + 1, scope);
+        struct node *d = n->decl.declarators.data[0];
+        for_each (&d->d.fun.args) {
+            int s = type_recur(context, *it, block_depth + 1, scope);
             if (s) scope = s;
         }
         // function body is a compound statement - that increments block_depth on its own, so

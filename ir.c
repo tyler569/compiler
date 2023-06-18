@@ -446,8 +446,8 @@ struct ir_reg *bb_emit_node(struct tu *tu, struct function *function, struct nod
 
     switch (node->type) {
     case NODE_ROOT:
-        for (int i = 0; i < MAX_BLOCK_MEMBERS && node->root.children[i]; i += 1) {
-            bb_emit_node(tu, function, node->root.children[i], false);
+        for_each (&node->root.children) {
+            bb_emit_node(tu, function, *it, false);
         }
         return nullptr;
     case NODE_BINARY_OP: {
@@ -510,8 +510,8 @@ struct ir_reg *bb_emit_node(struct tu *tu, struct function *function, struct nod
         break;
     case NODE_FUNCTION_CALL: {
         struct ir_instr ins = {};
-        for (int i = 0; i < MAX_FUNCTION_ARGS && node->funcall.args[i]; i += 1) {
-            list_push(&ins.args, bb_emit_node(tu, function, node->funcall.args[i], false));
+        for_each (&node->funcall.args) {
+            list_push(&ins.args, bb_emit_node(tu, function, *it, false));
         }
         reg *f = bb_emit_node(tu, function, node->funcall.inner, false);
         reg *out = new_temporary(function);
@@ -519,8 +519,8 @@ struct ir_reg *bb_emit_node(struct tu *tu, struct function *function, struct nod
         return out;
     }
     case NODE_DECLARATION:
-        for (int i = 0; i < MAX_DECLARATORS && node->decl.declarators[i]; i += 1) {
-            bb_emit_node(tu, function, node->decl.declarators[i], false);
+        for_each (&node->decl.declarators) {
+            bb_emit_node(tu, function, *it, false);
         }
         return nullptr;
     case NODE_TYPE_SPECIFIER:
@@ -544,8 +544,8 @@ struct ir_reg *bb_emit_node(struct tu *tu, struct function *function, struct nod
     case NODE_STATIC_ASSERT:
         break;
     case NODE_BLOCK:
-        for (int i = 0; i < MAX_BLOCK_MEMBERS && node->block.children[i]; i += 1) {
-            bb_emit_node(tu, function, node->block.children[i], false);
+        for_each (&node->block.children) {
+            bb_emit_node(tu, function, *it, false);
         }
         return nullptr;
     case NODE_LABEL:
@@ -635,6 +635,12 @@ struct ir_reg *bb_emit_node(struct tu *tu, struct function *function, struct nod
         break;
     case NODE_NULL:
         break;
+    case NODE_BREAK:break;
+    case NODE_CONTINUE:break;
+    case NODE_DEFAULT:break;
+    case NODE_STRUCT:break;
+    case NODE_ENUM:break;
+    case NODE_UNION:break;
     }
 
     fprintf(stderr, "unhandled node: %i\n", node->type);

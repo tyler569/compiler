@@ -55,8 +55,8 @@ int parse(struct tu *tu) {
     int n = 0;
     context->root = root;
 
-    while (more_data(context) && context->errors == 0 && n < MAX_BLOCK_MEMBERS) {
-        root->root.children[n++] = parse_external_definition(context);
+    while (more_data(context) && context->errors == 0) {
+        list_push(&root->root.children, parse_external_definition(context));
     }
 
     tu->nodes = root;
@@ -142,15 +142,15 @@ static void print_ast_recursive(const char *info, struct tu *tu, struct node *no
     switch (node->type) {
     case NODE_ROOT: {
         fprintf(stderr, "root:\n");
-        for (int i = 0; i < MAX_BLOCK_MEMBERS && node->root.children[i]; i++) {
-            RECUR(node->root.children[i]);
+        for_each (&node->root.children) {
+            RECUR(*it);
         }
         break;
     }
     case NODE_BLOCK: {
         fprintf(stderr, "block:\n");
-        for (int i = 0; i < MAX_BLOCK_MEMBERS && node->block.children[i]; i++) {
-            RECUR(node->block.children[i]);
+        for_each (&node->block.children) {
+            RECUR(*it);
         }
         break;
     }
@@ -201,16 +201,16 @@ static void print_ast_recursive(const char *info, struct tu *tu, struct node *no
     case NODE_FUNCTION_CALL: {
         fprintf(stderr, "funcall:\n");
         RECUR_INFO("fun:", node->funcall.inner);
-        for (int i = 0; i < MAX_FUNCTION_ARGS && node->funcall.args[i] != 0; i += 1) {
-            RECUR_INFO("arg", node->funcall.args[i]);
+        for_each (&node->funcall.args) {
+            RECUR_INFO("arg", *it);
         }
         break;
     }
     case NODE_DECLARATION: {
         fprintf(stderr, "decl:\n");
         RECUR_INFO("typ:", node->decl.type);
-        for (int i = 0; i < MAX_DECLARATORS && node->decl.declarators[i] != 0; i += 1) {
-            RECUR_INFO("dcl:", node->decl.declarators[i]);
+        for_each (&node->decl.declarators) {
+            RECUR_INFO("dcl:", *it);
         }
         break;
     }
@@ -464,9 +464,8 @@ static struct node *parse_postfix_expression(struct context *context) {
             struct node *node = new(context, NODE_FUNCTION_CALL);
             pass(context);
             node->funcall.inner = inner;
-            int i = 0;
-            while (TOKEN(context)->type != ')' && i < MAX_FUNCTION_ARGS) {
-                node->funcall.args[i++] = parse_assignment_expression(context);
+            while (TOKEN(context)->type != ')') {
+                list_push(&node->funcall.args, parse_assignment_expression(context));
                 if (TOKEN(context)->type != ')') eat(context, ',');
             }
             eat(context, ')');
@@ -737,9 +736,8 @@ static struct node *parse_direct_declarator(struct context *context) {
             inner->d.inner = node;
             inner->d.name = inner->d.inner->d.name;
             // TODO: args
-            int i = 0;
-            while (TOKEN(context)->type != ')' && i < MAX_FUNCTION_ARGS) {
-                inner->d.fun.args[i++] = parse_single_declaration(context);
+            while (TOKEN(context)->type != ')') {
+                list_push(&inner->d.fun.args, parse_single_declaration(context));
                 if (TOKEN(context)->type != ')') eat(context, ',');
             }
             node->token_end = TOKEN(context);
@@ -797,9 +795,8 @@ static struct node *parse_declaration(struct context *context) {
     struct node *node = new(context, NODE_DECLARATION);
 
     node->decl.type = parse_type_specifier(context);
-    int i = 0;
-    while (TOKEN(context)->type != ';' && i < MAX_DECLARATORS) {
-        node->decl.declarators[i++] = parse_full_declarator(context);
+    while (TOKEN(context)->type != ';') {
+        list_push(&node->decl.declarators, parse_full_declarator(context));
         if (TOKEN(context)->type != ';')
             eat(context, ',');
     }
@@ -815,8 +812,10 @@ static struct node *parse_single_declaration(struct context *context) {
     struct node *node = new(context, NODE_DECLARATION);
     node->decl.type = parse_type_specifier(context);
 
+    list_init_one(&node->decl.declarators);
+
     if (TOKEN(context)->type == '*' || TOKEN(context)->type == '(' || TOKEN(context)->type == TOKEN_IDENT)
-        node->decl.declarators[0] = parse_full_declarator(context);
+        node->decl.declarators.data[0] = parse_full_declarator(context);
 
     return node;
 }
@@ -832,9 +831,8 @@ static struct node *parse_expression_statement(struct context *context) {
 static struct node *parse_compound_statement(struct context *context) {
     struct node *node = new(context, NODE_BLOCK);
     eat(context, '{');
-    int i = 0;
     while (TOKEN(context)->type != '}') {
-        node->block.children[i++] = parse_statement(context);
+        list_push(&node->block.children, parse_statement(context));
     }
     node->token_end = TOKEN(context);
     eat(context, '}');

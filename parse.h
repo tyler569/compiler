@@ -59,10 +59,10 @@ struct node {
     int c_type;
     union {
         struct {
-            struct node *children[MAX_BLOCK_MEMBERS];
+            node_list_t children;
         } root;
         struct {
-            struct node *children[MAX_BLOCK_MEMBERS];
+            node_list_t children;
         } block;
         struct {
             int scope_id;
@@ -89,7 +89,7 @@ struct node {
         } ternary;
         struct {
             struct node *inner;
-            struct node *args[MAX_FUNCTION_ARGS];
+            node_list_t args;
         } funcall;
         struct {
             struct node *inner;
@@ -102,13 +102,13 @@ struct node {
                     struct node *subscript;
                 } arr;
                 struct {
-                    struct node *args[MAX_FUNCTION_ARGS];
+                    node_list_t args;
                 } fun;
             };
         } d;
         struct {
             struct node *type;
-            struct node *declarators[MAX_FUNCTION_ARGS];
+            node_list_t declarators;
         } decl;
         struct {
             struct node *expr;

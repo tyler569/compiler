@@ -12,7 +12,14 @@ struct {        \
 do {                        \
     (list)->data = nullptr; \
     (list)->len  = 0;       \
-    (list)->len  = 0;       \
+    (list)->cap  = 0;       \
+} while (0)
+
+#define list_init_one(list) \
+do {                        \
+    (list)->data = malloc(sizeof((list)->data[0])); \
+    (list)->len = 1;        \
+    (list)->cap = 1;        \
 } while (0)
 
 #define list_push(list, value) \
