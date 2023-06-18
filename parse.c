@@ -322,6 +322,12 @@ static void print_ast_recursive(const char *info, struct tu *tu, struct node *no
     case NODE_DEFAULT:
         fprintf(stderr, "default:\n");
         break;
+    case NODE_STRUCT:
+        fprintf(stderr, "struct:\n");
+        for_each (&node->struct_.decls) {
+            RECUR(*it);
+        }
+        break;
     default:
         fprintf(stderr, "UNKNOWN:\n");
         break;
@@ -609,6 +615,40 @@ static bool is_function_specifier(struct token *token) {
         token->type == TOKEN__NORETURN;
 }
 
+static bool is_typedef(struct context *context, struct token *token) {
+    return false;
+}
+
+static bool begins_type_name(struct context *context, struct token *token) {
+    // return is_type_qualifier(token) ||
+    //     is_type_qualifier(token) ||
+    //     is_bare_type_specifier(token) ||
+    //     is_function_specifier(token) ||
+    //     is_typedef(context, token);
+    return is_bare_type_specifier(token) || token->type == TOKEN_STRUCT;
+}
+
+static struct node *parse_struct(struct context *context) {
+    struct node *node = new(context, NODE_STRUCT);
+    eat(context, TOKEN_STRUCT);
+    if (TOKEN(context)->type == TOKEN_IDENT) {
+        struct node *name = parse_ident(context);
+        node->struct_.name = name;
+    }
+    if (TOKEN(context)->type == ';') {
+        eat(context, ';');
+        return node;
+    }
+    eat(context, '{');
+    while (TOKEN(context)->type != '}') {
+        struct node *n = parse_declaration(context);
+        list_push(&node->struct_.decls, n);
+    }
+    node->token_end = TOKEN(context);
+    eat(context, '}');
+    return node;
+}
+
 static struct node *parse_type_specifier(struct context *context) {
     struct token *token = TOKEN(context);
 
@@ -616,18 +656,11 @@ static struct node *parse_type_specifier(struct context *context) {
         struct node *node = new(context, NODE_TYPE_SPECIFIER);
         pass(context);
         return node;
+    } else if (TOKEN(context)->type == TOKEN_STRUCT) {
+        return parse_struct(context);
     } else {
         return report_error_node(context, "non-basic type specifiers are not yet supported");
     }
-}
-
-static struct node *parse_type_specifier_qualifier_list(struct context *context) {
-    struct token *token = TOKEN(context);
-
-    while (is_bare_type_specifier(token) || is_type_qualifier(token)) {
-    }
-
-    return report_error_node(context, "todo 123123212412");
 }
 
 static struct node *parse_direct_declarator(struct context *);
@@ -872,7 +905,7 @@ static struct node *parse_for_statement(struct context *context) {
     eat(context, '(');
     struct node *init = nullptr, *cond = nullptr, *next = nullptr;
     if (TOKEN(context)->type != ';') {
-        if (is_bare_type_specifier(TOKEN(context))) {
+        if (begins_type_name(context, TOKEN(context))) {
             init = parse_declaration(context);
         } else {
             init = parse_expression(context);
@@ -959,7 +992,7 @@ static struct node *parse_statement(struct context *context) {
     case TOKEN_IDENT:
         if (PEEK(context)->type == ':')
             return parse_label(context);
-        else if (is_bare_type_specifier(TOKEN(context)))
+        else if (begins_type_name(context, TOKEN(context)))
             return parse_declaration(context);
         else
             return parse_expression_statement(context);
@@ -987,7 +1020,7 @@ static struct node *parse_statement(struct context *context) {
         return parse_default_statement(context);
     }
 
-    if (is_bare_type_specifier(TOKEN(context)))
+    if (begins_type_name(context, TOKEN(context)))
         return parse_declaration(context);
 
     return parse_expression_statement(context);

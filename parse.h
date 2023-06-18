@@ -39,6 +39,11 @@ enum node_type {
     NODE_CONTINUE,
     NODE_DEFAULT,
     NODE_NULL,
+
+    NODE_STRUCT,
+    NODE_ENUM,
+    NODE_UNION,
+
 };
 
 #define MAX_BLOCK_MEMBERS 10

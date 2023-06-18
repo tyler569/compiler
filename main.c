@@ -19,7 +19,7 @@ int main(int argc, char **argv) {
     };
 
     if (argc < 2) {
-        tu->source = "int main() {}";
+        tu->source = "int main() {struct { int a, b; int *c, *d; } a; a;}";
         tu->source_len = strlen(tu->source);
     } else {
         int file = open(argv[1], O_RDONLY);
