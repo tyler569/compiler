@@ -276,8 +276,46 @@ static void print_ast_recursive(const char *info, struct tu *tu, struct node *no
     case NODE_ERROR:
         printf("error: %.*s\n", token->len, &source[token->index]);
         break;
-    default:
-        printf("unknown\n");
+    case NODE_STRING_LITERAL:
+        printf("string literal:\n");
+        break;
+    case NODE_MEMBER:
+        printf("member:\n");
+        RECUR_INFO("val:", node->member.inner);
+        RECUR_INFO("nam:", node->member.ident);
+        break;
+    case NODE_LABEL:
+        printf("label:\n");
+        RECUR(node->label.name);
+        break;
+    case NODE_DO:
+        printf("do:\n");
+        RECUR_INFO("blk:", node->do_.block);
+        RECUR_INFO("cnd:", node->do_.cond);
+        break;
+    case NODE_FOR:
+        printf("for:\n");
+        RECUR_INFO("ini:", node->for_.init);
+        RECUR_INFO("cnd:", node->for_.cond);
+        RECUR_INFO("nxt:", node->for_.next);
+        RECUR_INFO("blk:", node->for_.block);
+        break;
+    case NODE_GOTO:
+        printf("goto:\n");
+        RECUR(node->goto_.label);
+        break;
+    case NODE_SWITCH:
+        printf("switch:\n");
+        RECUR_INFO("exp:", node->switch_.expr);
+        RECUR_INFO("blk:", node->switch_.block);
+        break;
+    case NODE_CASE:
+        printf("case:\n");
+        RECUR(node->case_.value);
+        break;
+    case NODE_CONTINUE:
+        printf("continue:\n");
+        break;
     }
 }
 #undef RECUR
@@ -395,7 +433,7 @@ static struct node *parse_postfix_expression(struct context *context) {
             struct node *node = new(context, NODE_MEMBER);
             pass(context);
             node->member.inner = inner;
-            node->member.ident = TOKEN(context);
+            node->member.ident = parse_ident(context);
             node->token_end = TOKEN(context);
             pass(context);
             inner = node;
@@ -804,6 +842,96 @@ static struct node *parse_while_statement(struct context *context) {
     return node;
 }
 
+static struct node *parse_do_statement(struct context *context) {
+    struct node *node = new(context, NODE_DO);
+    eat(context, TOKEN_DO);
+    struct node *block = parse_statement(context);
+    eat(context, TOKEN_WHILE);
+    eat(context, '(');
+    struct node *cond = parse_expression(context);
+    eat(context, ')');
+    node->token_end = TOKEN(context);
+    eat(context, ';');
+    node->do_.block = block;
+    node->do_.cond = cond;
+    return node;
+}
+
+static struct node *parse_for_statement(struct context *context) {
+    struct node *node = new(context, NODE_FOR);
+    eat(context, TOKEN_FOR);
+    eat(context, '(');
+    struct node *init = nullptr, *cond = nullptr, *next = nullptr;
+    if (TOKEN(context)->type != ';') {
+        if (is_bare_type_specifier(TOKEN(context))) {
+            init = parse_declaration(context);
+        } else {
+            init = parse_expression(context);
+            eat(context, ';');
+        }
+    } else {
+        eat(context, ';');
+    }
+    if (TOKEN(context)->type != ';') {
+        cond = parse_expression(context);
+    }
+    eat(context, ';');
+    if (TOKEN(context)->type != ')') {
+        next = parse_expression(context);
+    }
+    eat(context, ')');
+    struct node *block = parse_statement(context);
+    node->for_.init = init;
+    node->for_.cond = cond;
+    node->for_.next = next;
+    node->for_.block = block;
+    return node;
+}
+
+static struct node *parse_switch_statement(struct context *context) {
+    struct node *node = new(context, NODE_SWITCH);
+    eat(context, TOKEN_SWITCH);
+    eat(context, '(');
+    struct node *expr = parse_expression(context);
+    eat(context, ')');
+    struct node *block = parse_statement(context);
+    node->switch_.expr = expr;
+    node->switch_.block = block;
+    return node;
+}
+
+static struct node *parse_case_statement(struct context *context) {
+    struct node *node = new(context, NODE_CASE);
+    eat(context, TOKEN_CASE);
+    struct node *value = parse_expression(context);
+    eat(context, ':');
+    node->case_.value = value;
+    return node;
+}
+
+static struct node *parse_goto_statement(struct context *context) {
+    struct node *node = new(context, NODE_GOTO);
+    eat(context, NODE_GOTO);
+    struct node *ident = parse_ident(context);
+    eat(context, ';');
+    node->goto_.label = ident;
+    return node;
+}
+
+static struct node *parse_break_statement(struct context *context) {
+    struct node *node = new(context, NODE_GOTO);
+    eat(context, TOKEN_BREAK);
+    eat(context, ';');
+    return node;
+}
+
+static struct node *parse_continue_statement(struct context *context) {
+    struct node *node = new(context, NODE_CONTINUE);
+    eat(context, TOKEN_CONTINUE);
+    eat(context, ';');
+    return node;
+}
+
 static struct node *parse_statement(struct context *context) {
     switch (TOKEN(context)->type) {
     case '{':
@@ -825,12 +953,28 @@ static struct node *parse_statement(struct context *context) {
         return parse_if_statement(context);
     case TOKEN_WHILE:
         return parse_while_statement(context);
+    case TOKEN_DO:
+        return parse_do_statement(context);
+    case TOKEN_FOR:
+        return parse_for_statement(context);
+    case TOKEN_SWITCH:
+        return parse_switch_statement(context);
+    case TOKEN_CASE:
+        return parse_case_statement(context);
+    case TOKEN_GOTO:
+        return parse_goto_statement(context);
+    case TOKEN_BREAK:
+        return parse_break_statement(context);
+    case TOKEN_CONTINUE:
+        return parse_continue_statement(context);
     }
 
     if (is_bare_type_specifier(TOKEN(context)))
         return parse_declaration(context);
 
-    return report_error_node(context, "unknown statement, probably TODO");
+    return parse_expression_statement(context);
+
+    // return report_error_node(context, "unknown statement, probably TODO");
 }
 
 static struct node *parse_function_definition(struct context *context) {

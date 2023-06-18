@@ -33,6 +33,8 @@ enum layer_type {
     TYPE_ARG,
 };
 
+#define TF_ALIGNAS_BIT 6
+
 enum type_flags {
     TF_ATOMIC = (1 << 0),
     TF_CONST = (1 << 1),
@@ -42,13 +44,11 @@ enum type_flags {
     TF_NORETURN = (1 << 5),
     // 4 bits representing log2(alignas value)
     // alignas(32) is represented as (5 << TF_ALIGNAS_BIT)
-    TF_ALIGNAS_0 = (1 << 6),
-    TF_ALIGNAS_1 = (1 << 7),
-    TF_ALIGNAS_2 = (1 << 8),
-    TF_ALIGNAS_3 = (1 << 9),
+    TF_ALIGNAS_0 = (1 << (TF_ALIGNAS_BIT + 0)),
+    TF_ALIGNAS_1 = (1 << (TF_ALIGNAS_BIT + 1)),
+    TF_ALIGNAS_2 = (1 << (TF_ALIGNAS_BIT + 2)),
+    TF_ALIGNAS_3 = (1 << (TF_ALIGNAS_BIT + 3)),
 };
-
-#define TF_ALIGNAS_BIT 6
 
 struct type {
     enum layer_type layer;
@@ -80,6 +80,7 @@ struct type {
 struct scope {
     struct token *token;
     struct node *decl;
+    bool ns_tag;
     int c_type;
     int parent;
     int block_depth;

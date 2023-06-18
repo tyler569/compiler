@@ -47,17 +47,28 @@ int main() {
     //                      "    }"
     //                      "    return a;"
     //                      "}";
-    const char *source = "int main() { \n"
-                         "  int x = 10;\n"
-                         "  while (1) {\n"
-                         "    if (1) {\n"
-                         "      x = 10;\n"
-                         "    } else {\n"
-                         "      int x = 1;\n"
-                         "    }\n"
-                         "  }\n"
-                         "  use(x);\n"
-                         "}\n";
+    // const char *source = "int main() { \n"
+    //                      "  int x = 10;\n"
+    //                      "  while (1) {\n"
+    //                      "    if (1) {\n"
+    //                      "      x = 10;\n"
+    //                      "    } else {\n"
+    //                      "      int x = 1;\n"
+    //                      "    }\n"
+    //                      "  }\n"
+    //                      "  use(x);\n"
+    //                      "}\n";
+    const char *source = "int main() {"
+                         "  switch(1) {"
+                         "  case 1:"
+                         "    if (foo) {"
+                         "  label:"
+                         "  case 2:"
+                         "      2;"
+                         "    }"
+                         "  }"
+                         "  do 1; while (3);"
+                         "}";
 
     struct tu *tu = &(struct tu){
         .source = source,

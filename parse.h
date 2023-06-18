@@ -2,6 +2,8 @@
 #ifndef COMPILER_PARSE_H
 #define COMPILER_PARSE_H
 
+#include "list.h"
+
 enum node_type {
     NODE_ROOT,
     NODE_BINARY_OP,
@@ -33,12 +35,15 @@ enum node_type {
     NODE_GOTO,
     NODE_SWITCH,
     NODE_CASE,
+    NODE_CONTINUE,
     NODE_NULL,
 };
 
 #define MAX_BLOCK_MEMBERS 10
 #define MAX_FUNCTION_ARGS 9
 #define MAX_DECLARATORS 9
+
+typedef list(struct node *) node_list_t;
 
 struct node {
     struct token *token;
@@ -64,7 +69,7 @@ struct node {
         } unary_op;
         struct {
             struct node *inner;
-            struct token *ident;
+            struct node *ident;
         } member;
         struct {
             struct node *inner;
@@ -121,6 +126,30 @@ struct node {
             struct node *cond;
             struct node *block;
         } while_;
+        struct {
+            struct node *cond;
+            struct node *block;
+        } do_;
+        struct {
+            struct node *init;
+            struct node *next;
+            struct node *cond;
+            struct node *block;
+        } for_;
+        struct {
+            struct node *label;
+        } goto_;
+        struct {
+            struct node *value;
+        } case_;
+        struct {
+            struct node *expr;
+            struct node *block;
+        } switch_;
+        struct {
+            struct node *name;
+            node_list_t decls;
+        } struct_;
     };
 };
 
