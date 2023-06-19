@@ -553,6 +553,6 @@ const char *token_type_string(int token_type) {
     CASE(TOKEN_COLON_COLON, "::")
 #undef CASE
     default:
-        return "unknown token type";
+        return "unknown token decl_spec";
     }
 }

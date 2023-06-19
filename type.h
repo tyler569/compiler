@@ -2,6 +2,8 @@
 #ifndef COMPILER_TYPE_H
 #define COMPILER_TYPE_H
 
+#include "list.h"
+
 enum layer_type {
     TYPE_VOID,
     TYPE_SIGNED_CHAR,
@@ -28,9 +30,6 @@ enum layer_type {
     TYPE_ENUM,
     TYPE_STRUCT,
     TYPE_UNION,
-
-    TYPE_FIELD,
-    TYPE_ARG,
 };
 
 #define TF_ALIGNAS_BIT 6
@@ -50,36 +49,47 @@ enum type_flags {
     TF_ALIGNAS_3 = (1 << (TF_ALIGNAS_BIT + 3)),
 };
 
+enum storage_class {
+    ST_AUTOMATIC,
+    ST_CONSTEXPR,
+    ST_EXTERNAL,
+    ST_REGISTER,
+    ST_STATIC,
+    ST_THREAD_LOCAL,
+    ST_TYPEDEF,
+};
+
+struct type;
+
+typedef list(struct type) type_list_t;
+
 struct type {
     enum layer_type layer;
     enum type_flags flags;
+
+    int inner;
 
     union {
         struct {
             struct token *name;
             int bits;
-            int next;
         } field;
         struct {
             struct token *name;
         } enum_;
         struct {
-            int next;
-        } function_arg;
-        struct {
-            int first_arg;
-        } function;
-        struct {
-            int first_field;
+            type_list_t fields;
         } struct_;
+        struct {
+            type_list_t args;
+        } function;
     };
-
-    int inner;
 };
 
 struct scope {
     struct token *token;
     struct node *decl;
+    enum storage_class sc;
     bool ns_tag;
     int c_type;
     int parent;
@@ -89,6 +99,8 @@ struct scope {
 
 struct tu;
 
+int find_or_create_type(struct tu *, int inner, enum layer_type base, enum type_flags flags);
+void print_type(struct tu *tu, int type_id);
 int type(struct tu *tu);
 
 #endif //COMPILER_TYPE_H

@@ -2,6 +2,7 @@
 #include "token.h"
 #include "util.h"
 #include "diag.h"
+#include "type.h"
 #include "tu.h"
 
 #include <stdarg.h>
@@ -222,14 +223,17 @@ static void print_ast_recursive(const char *info, struct tu *tu, struct node *no
     }
     case NODE_DECLARATION: {
         fprintf(stderr, "decl:\n");
-        RECUR_INFO("typ:", node->decl.type);
+        print_space(level + 1);
+        fprintf(stderr, "typ: ");
+        print_type(tu, node->decl.decl_spec_c_type);
+        fprintf(stderr, "\n");
         for_each (&node->decl.declarators) {
             RECUR_INFO("dcl:", *it);
         }
         break;
     }
     case NODE_TYPE_SPECIFIER: {
-        fprintf(stderr, "type: %.*s\n", token->len, &source[token->index]);
+        fprintf(stderr, "decl_spec: %.*s\n", token->len, &source[token->index]);
         break;
     }
     case NODE_DECLARATOR:
@@ -638,13 +642,22 @@ static bool is_typedef(struct context *context, struct token *token) {
     return false;
 }
 
+static bool is_declaration_specifier(struct context *context, struct token *token) {
+     return is_type_qualifier(token) ||
+         is_type_qualifier(token) ||
+         is_bare_type_specifier(token) ||
+         is_storage_class(token) ||
+         is_function_specifier(token); // || is_typedef(context, token);
+}
+
 static bool begins_type_name(struct context *context, struct token *token) {
     // return is_type_qualifier(token) ||
     //     is_type_qualifier(token) ||
     //     is_bare_type_specifier(token) ||
     //     is_function_specifier(token) ||
     //     is_typedef(context, token);
-    return is_bare_type_specifier(token) || token->type == TOKEN_STRUCT || token->type == TOKEN_UNION;
+    return is_bare_type_specifier(token) || token->type == TOKEN_STRUCT || token->type == TOKEN_UNION ||
+        is_declaration_specifier(context, token);
 }
 
 static struct node *parse_struct(struct context *context) {
@@ -684,7 +697,7 @@ static struct node *parse_type_specifier(struct context *context) {
     } else if (TOKEN(context)->type == TOKEN_STRUCT || TOKEN(context)->type == TOKEN_UNION) {
         return parse_struct(context);
     } else {
-        return report_error_node(context, "non-basic type specifiers are not yet supported");
+        return report_error_node(context, "non-basic decl_spec specifiers are not yet supported");
     }
 }
 
@@ -801,6 +814,175 @@ static struct node *parse_static_assert_declaration(struct context *context) {
     return node;
 }
 
+static struct node *parse_declaration_specifier_list(struct context *context, struct node *node) {
+    enum layer_type base_type = 0;
+    enum type_flags type_flags = 0;
+    enum storage_class sc = ST_AUTOMATIC;
+
+    enum parse_state {
+        SEEN_TOKEN_CHAR = (1 << 0),
+        SEEN_TOKEN_SHORT = (1 << 1),
+        SEEN_TOKEN_LONG = (1 << 2),
+        SEEN_TOKEN_LONG_TWICE = (1 << 3),
+        SEEN_TOKEN_INT = (1 << 4),
+        SEEN_TOKEN_SIGNED = (1 << 5),
+        SEEN_TOKEN_UNSIGNED = (6 << 6),
+        SEEN_TOKEN_FLOAT = (1 << 7),
+        SEEN_TOKEN_DOUBLE = (1 << 8),
+        SEEN_TOKEN_COMPLEX = (1 << 9),
+
+        SEEN_FLOAT = SEEN_TOKEN_FLOAT | SEEN_TOKEN_DOUBLE | SEEN_TOKEN_COMPLEX,
+    };
+    enum parse_state state = 0;
+
+    // todo: this needs to be as large as the list of tokens
+    static const enum parse_state incompatible[256] = {
+        [TOKEN_CHAR] = SEEN_TOKEN_CHAR | SEEN_TOKEN_SHORT | SEEN_TOKEN_LONG | SEEN_FLOAT,
+        [TOKEN_SHORT] = SEEN_TOKEN_CHAR | SEEN_TOKEN_LONG | SEEN_FLOAT,
+        [TOKEN_LONG] = SEEN_TOKEN_CHAR | SEEN_TOKEN_LONG_TWICE | SEEN_TOKEN_FLOAT,
+        [TOKEN_INT_] = SEEN_TOKEN_CHAR | SEEN_TOKEN_INT | SEEN_FLOAT,
+        [TOKEN_SIGNED] = SEEN_TOKEN_UNSIGNED | SEEN_FLOAT,
+        [TOKEN_UNSIGNED] = SEEN_TOKEN_SIGNED | SEEN_FLOAT,
+        [TOKEN_FLOAT_] = SEEN_TOKEN_CHAR | SEEN_TOKEN_SHORT | SEEN_TOKEN_LONG | SEEN_TOKEN_INT | SEEN_TOKEN_SIGNED |
+                        SEEN_TOKEN_UNSIGNED,
+        [TOKEN_DOUBLE] = SEEN_TOKEN_CHAR | SEEN_TOKEN_SHORT | SEEN_TOKEN_INT | SEEN_TOKEN_SIGNED | SEEN_TOKEN_UNSIGNED,
+    };
+
+    while (is_declaration_specifier(context, TOKEN(context))) {
+        if (incompatible[TOKEN(context)->type] & state) {
+            return report_error_node(context, "invalid combination of declaration specifiers");
+        }
+
+        switch (TOKEN(context)->type) {
+        case TOKEN_STRUCT:
+        case TOKEN_UNION: {
+            base_type = TYPE_STRUCT;
+            struct node *struct_ = parse_struct(context);
+        case TOKEN_ENUM:
+            return report_error_node(context, "constructing struct and enum types is not yet supported");
+        }
+
+        case TOKEN_CONST:
+            type_flags |= TF_CONST;
+            break;
+        case TOKEN_VOLATILE:
+            type_flags |= TF_VOLATILE;
+            break;
+        case TOKEN__ATOMIC:
+            type_flags |= TF_ATOMIC;
+            break;
+        case TOKEN_RESTRICT:
+            type_flags |= TF_RESTRICT;
+            break;
+        case TOKEN_INLINE:
+            type_flags |= TF_INLINE;
+            break;
+        case TOKEN__NORETURN:
+            type_flags |= TF_NORETURN;
+            break;
+
+        // TODO: storage classes can overwrite others
+        case TOKEN_CONSTEXPR:
+            sc = ST_CONSTEXPR;
+                break;
+        case TOKEN_EXTERN:
+            sc = ST_EXTERNAL;
+            break;
+        case TOKEN_REGISTER:
+            sc = ST_REGISTER;
+            break;
+        case TOKEN_STATIC:
+            sc = ST_STATIC;
+            break;
+        case TOKEN_THREAD_LOCAL:
+            sc = ST_THREAD_LOCAL;
+            break;
+        case TOKEN_TYPEDEF:
+            sc = ST_TYPEDEF;
+            break;
+
+        case TOKEN_CHAR:
+            state |= SEEN_TOKEN_CHAR;
+            if (base_type == TYPE_UNSIGNED_INT) base_type = TYPE_UNSIGNED_CHAR;
+            else if (base_type == TYPE_SIGNED_INT) base_type = TYPE_SIGNED_CHAR;
+            else if (base_type == 0) base_type = TYPE_SIGNED_CHAR;
+            else goto error;
+            break;
+        case TOKEN_SHORT:
+            state |= SEEN_TOKEN_SHORT;
+            if (base_type == TYPE_SIGNED_INT) base_type = TYPE_SIGNED_SHORT;
+            else if (base_type == TYPE_UNSIGNED_INT) base_type = TYPE_UNSIGNED_SHORT;
+            else if (base_type == 0) base_type = TYPE_SIGNED_SHORT;
+            else goto error;
+            break;
+        case TOKEN_LONG:
+            state |= SEEN_TOKEN_LONG;
+            if (base_type == TYPE_SIGNED_INT) base_type = TYPE_SIGNED_LONG;
+            else if (base_type == TYPE_UNSIGNED_INT) base_type = TYPE_UNSIGNED_LONG;
+            else if (base_type == TYPE_SIGNED_LONG) base_type = TYPE_SIGNED_LONG_LONG;
+            else if (base_type == TYPE_UNSIGNED_LONG) base_type = TYPE_UNSIGNED_LONG_LONG;
+            else if (base_type == 0) base_type = TYPE_SIGNED_LONG;
+            else goto error;
+            break;
+        case TOKEN_INT_:
+            state |= SEEN_TOKEN_INT;
+            if (base_type == TYPE_SIGNED_SHORT) {}
+            else if (base_type == TYPE_SIGNED_INT) goto error;
+            else if (base_type == TYPE_SIGNED_LONG) {}
+            else if (base_type == TYPE_SIGNED_LONG_LONG) {}
+            else if (base_type == TYPE_UNSIGNED_SHORT) {}
+            else if (base_type == TYPE_UNSIGNED_INT) goto error;
+            else if (base_type == TYPE_UNSIGNED_LONG) {}
+            else if (base_type == TYPE_UNSIGNED_LONG_LONG) {}
+            else if (base_type == TYPE_UNSIGNED_INT) {}
+            else if (base_type == 0) base_type = TYPE_SIGNED_INT;
+            else goto error;
+            break;
+        case TOKEN_SIGNED:
+            state |= SEEN_TOKEN_SIGNED;
+            if (base_type == TYPE_SIGNED_SHORT) {}
+            else if (base_type == TYPE_SIGNED_INT) {}
+            else if (base_type == TYPE_SIGNED_LONG) {}
+            else if (base_type == TYPE_SIGNED_LONG_LONG) {}
+            else if (base_type == 0) base_type = TYPE_SIGNED_INT;
+            else goto error;
+            break;
+        case TOKEN_UNSIGNED:
+            state |= SEEN_TOKEN_UNSIGNED;
+            if (base_type == TYPE_UNSIGNED_SHORT) {}
+            else if (base_type == TYPE_UNSIGNED_INT) {}
+            else if (base_type == TYPE_UNSIGNED_LONG) {}
+            else if (base_type == TYPE_UNSIGNED_LONG_LONG) {}
+            else if (base_type == 0) base_type = TYPE_UNSIGNED_INT;
+            else goto error;
+            break;
+        case TOKEN_FLOAT_:
+            state |= SEEN_TOKEN_FLOAT;
+            if (base_type == 0) base_type = TYPE_FLOAT;
+            else goto error;
+            break;
+        case TOKEN_DOUBLE:
+            state |= SEEN_TOKEN_DOUBLE;
+            if (base_type == TYPE_SIGNED_LONG) base_type = TYPE_LONG_DOUBLE;
+            else if (base_type == 0) base_type = TYPE_DOUBLE;
+            else goto error;
+            break;
+        default:
+            return report_error_node(context, "invalid type parse state");
+        }
+        pass(context);
+    }
+
+    int decl_spec_c_type = find_or_create_type(context->tu, 0, base_type, type_flags);
+    if (!decl_spec_c_type) goto error;
+    node->decl.decl_spec_c_type = decl_spec_c_type;
+    node->decl.sc = sc;
+    return nullptr;
+
+error:
+    return report_error_node(context, "invalid type parse state");
+}
+
 static struct node *parse_declaration(struct context *context) {
     if (TOKEN(context)->type == TOKEN_STATIC_ASSERT) {
         return parse_static_assert_declaration(context);
@@ -808,7 +990,9 @@ static struct node *parse_declaration(struct context *context) {
 
     struct node *node = new(context, NODE_DECLARATION);
 
-    node->decl.type = parse_type_specifier(context);
+    struct node *err = parse_declaration_specifier_list(context, node);
+    if (err) return err;
+
     while (TOKEN(context)->type != ';') {
         list_push(&node->decl.declarators, parse_full_declarator(context));
         if (TOKEN(context)->type != ';')
@@ -818,13 +1002,16 @@ static struct node *parse_declaration(struct context *context) {
     eat(context, ';');
 
     return node;
+
 }
 
 // a "single declaration" contains 0 or 1 declarators and doesn't necessarily end with a ;
 // this is for function definitions and parameters.
 static struct node *parse_single_declaration(struct context *context) {
     struct node *node = new(context, NODE_DECLARATION);
-    node->decl.type = parse_type_specifier(context);
+
+    struct node *err = parse_declaration_specifier_list(context, node);
+    if (err) return err;
 
     list_init_one(&node->decl.declarators);
 

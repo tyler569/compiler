@@ -3,6 +3,7 @@
 #define COMPILER_PARSE_H
 
 #include "list.h"
+#include "type.h"
 
 enum node_type {
     NODE_NULL,
@@ -106,7 +107,8 @@ struct node {
             };
         } d;
         struct {
-            struct node *type;
+            int decl_spec_c_type;
+            enum storage_class sc;
             node_list_t declarators;
         } decl;
         struct {

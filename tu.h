@@ -23,9 +23,9 @@ struct tu {
     size_t tokens_len;
 
     struct node *ast_root;
-    struct scope *scopes;
-    size_t scopes_len;
 
+    scope_list_t scopes;
+    type_list_t types;
     function_list_t functions;
 
     struct {

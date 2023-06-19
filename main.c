@@ -18,8 +18,11 @@ int main(int argc, char **argv) {
         .abort = false // true,
     };
 
+    list_push(&tu->types, (struct type){});
+    list_push(&tu->scopes, (struct scope){});
+
     if (argc < 2) {
-        tu->source = "int main() {union { int a, b; int *c, *d; } a; a;}";
+        tu->source = "int main() { const int x = 10; register short int y = 11; x + y; }";
         tu->source_len = strlen(tu->source);
     } else {
         int file = open(argv[1], O_RDONLY);

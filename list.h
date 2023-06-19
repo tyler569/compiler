@@ -32,10 +32,15 @@ do {                           \
     (list)->data[(list)->len++] = value; \
 } while (0)
 
+#define list_last_index(list) ((list)->len - 1)
+
 #define list_at(list, index) (list)->data[(index)]
+#define list_ptr(list, index) ((list)->data + (index))
 
 #define list_end(list) (list)->data[(list)->len]
 #define list_last(list) (list)->data[(list)->len - 1]
+
+#define list_indexof(list, ptr) (ptr - (list)->data)
 
 #define list_clear(list) do { \
     free((list)->data);       \
