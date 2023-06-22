@@ -27,6 +27,7 @@ enum ir_op : char {
     IMM,    // r1 <- imm
     ST,     // [r1 + r3] <- r2
     LD,     // r1 <- [r2 + r3]
+    ADDR,   // r1 <- addr r2
     CALL,   // name + args unknown
     RET,    // r1
     TEST,   // r1 <- r2 < r3

@@ -12,12 +12,10 @@
 #define TSCOPE(n) list_ptr(&tu->scopes, n)
 
 void print_ir_reg(struct tu *tu, struct ir_reg *reg) {
-    fputc('r', stderr);
     if (reg->scope) {
         print_token(tu, reg->scope->token);
-        // fputc('.', stderr);
     } else {
-        fprintf(stderr, "%i", reg->index);
+        fprintf(stderr, "r%i", reg->index);
     }
 }
 
@@ -58,6 +56,7 @@ void print_ir_instr(struct tu *tu, struct ir_instr *i) {
     CASE2(NEG, "neg");
     CASE2(INV, "inv");
     CASE2(NOT, "not");
+    CASE2(ADDR, "addr");
 
     case MOVE:
         print_reg(tu, i, 0);
@@ -65,6 +64,19 @@ void print_ir_instr(struct tu *tu, struct ir_instr *i) {
         print_reg(tu, i, 1);
         fputc('\n', stderr);
         break;
+
+    case LD:
+        print_reg(tu, i, 0);
+        fprintf(stderr, " := [");
+        print_reg(tu, i, 1);
+        fprintf(stderr, "]\n");
+
+    case ST:
+        fprintf(stderr, "[");
+        print_reg(tu, i, 0);
+        fprintf(stderr, "] := ");
+        print_reg(tu, i, 1);
+        fprintf(stderr, "\n");
 
     case IMM:
         print_reg(tu, i, 0);
@@ -286,8 +298,27 @@ struct ir_reg *emit_node_recur(struct tu *tu, struct function *function, struct 
             return res;
         }
     }
-    case NODE_UNARY_OP:
-        break;
+    case NODE_UNARY_OP: {
+        enum ir_op op;
+        switch (node->token->type) {
+#define CASE(token, p) case (token): op = (p); break
+        CASE('-', NEG);
+        CASE('!', NOT);
+        CASE('~', INV);
+        CASE('*', ST);
+        CASE('&', ADDR);
+#undef CASE
+        default:
+            fprintf(stderr, "unhandled binary operation: %i\n", node->token->type);
+            return nullptr;
+        }
+        if (op == ST && !write) op = LD;
+
+        reg *inner = emit_node_recur(tu, function, node->unary_op.inner, write);
+        reg *res = new_temporary(function);
+        EMIT(ir_unop(op, res, inner));
+        return res;
+    }
     case NODE_POSTFIX_OP:
         break;
     case NODE_IDENT: {
@@ -363,13 +394,16 @@ struct ir_reg *emit_node_recur(struct tu *tu, struct function *function, struct 
         const char *label_end = tprintf(tu, "if%i.end", function->cond_id);
 
         EMIT(ir_jz(label_false, test));
-
         emit_node_recur(tu, function, node->if_.block_true, false);
-        EMIT(ir_jmp(label_end));
 
-        EMIT(ir_label(label_false));
-        emit_node_recur(tu, function, node->if_.block_false, false);
-        EMIT(ir_label(label_end));
+        if (node->if_.block_false) {
+            EMIT(ir_jmp(label_end));
+            EMIT(ir_label(label_false));
+            emit_node_recur(tu, function, node->if_.block_false, false);
+            EMIT(ir_label(label_end));
+        } else {
+            EMIT(ir_label(label_false));
+        }
 
         return nullptr;
     }
