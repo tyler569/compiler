@@ -58,7 +58,7 @@ int main(int argc, char **argv) {
 
     fprintf(stderr, "\n");
 
-    // emit(tu);
+    emit(tu);
 
     // for (int i = 0; i < tu->ir_len; i += 1) {
     //     print_ir_instr(tu, &tu->ir[i]);

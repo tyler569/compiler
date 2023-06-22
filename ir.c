@@ -11,26 +11,12 @@
 #define SCOPE(n) list_ptr(&context->tu->scopes, n)
 #define TSCOPE(n) list_ptr(&tu->scopes, n)
 
-void print_ir_reg_name(struct ir_reg *reg) {
-    fprintf(stderr, "r%i", reg->index);
-}
-
 void print_ir_reg(struct tu *tu, struct ir_reg *reg) {
-    if (reg->is_phi) {
-        fprintf(stderr, "phi (");
-        bool first = true;
-        for_each (&reg->phi_list) {
-            if (!first) fprintf(stderr, ", ");
-            first = false;
-            print_ir_reg_name(*it);
-        }
-        fprintf(stderr, ")");
+    fputc('r', stderr);
+    if (reg->scope) {
+        print_token(tu, reg->scope->token);
+        // fputc('.', stderr);
     } else {
-        fputc('r', stderr);
-        if (reg->scope) {
-            print_token(tu, reg->scope->token);
-            fputc('.', stderr);
-        }
         fprintf(stderr, "%i", reg->index);
     }
 }
@@ -114,6 +100,7 @@ void print_ir_instr(struct tu *tu, struct ir_instr *i) {
         for_each (&i->args) {
             if (!first) fprintf(stderr, ", ");
             print_ir_reg(tu, *it);
+            first = false;
         }
         break;
 
@@ -128,30 +115,6 @@ void print_ir_instr(struct tu *tu, struct ir_instr *i) {
     }
 }
 
-void print_link(struct bb *from, struct bb *to) {
-    if (from->name)
-        fprintf(stderr, "    \"%s\" -> ", from->name);
-    else
-        fprintf(stderr, "    \"%p\" -> ", from);
-    if (to->name)
-        fprintf(stderr, "\"%s\";\n", to->name);
-    else
-        fprintf(stderr, "\"%p\";\n", to);
-}
-
-void print_control_flow(struct tu *tu, struct function *function) {
-    fprintf(stderr, "digraph {\n");
-    for_each (&function->bbs) {
-        for_each_n (bb, &(*it)->inputs) {
-            print_link(*bb, *it);
-        }
-        for_each_n (bb, &(*it)->outputs) {
-            print_link(*it, *bb);
-        }
-    }
-    fprintf(stderr, "}\n");
-}
-
 // TODO: this should use the tu argument to print to tu->strtab instead of allocating
 // for itself.
 const char *tprintf(struct tu *tu, const char *format, ...) {
@@ -163,24 +126,16 @@ const char *tprintf(struct tu *tu, const char *format, ...) {
     return out;
 }
 
-struct bb *active_bb(struct function *function) {
-    return list_last(&function->bbs);
-}
-
-struct ir_reg *bb_emit_node(struct tu *tu, struct function *function, struct node *node, bool write);
+struct ir_reg *emit_node_recur(struct tu *tu, struct function *function, struct node *node, bool write);
 struct function *new_function();
 
 int emit(struct tu *tu) {
     struct function *function = new_function();
 
-    bb_emit_node(tu, function, tu->ast_root, false);
+    emit_node_recur(tu, function, tu->ast_root, false);
 
-    for_each (&function->bbs) {
-        fprintf(stderr, "\nnew bb:\n");
-
-        for_each_n (instr, &(*it)->ir_list) {
-            print_ir_instr(tu, instr);
-        }
+    for_each_n (instr, &function->ir_list) {
+        print_ir_instr(tu, instr);
     }
 
     // fprintf(stderr, "\n");
@@ -264,186 +219,38 @@ struct ir_instr ir_call(struct ir_reg *out, struct ir_reg *func, reg_list_t args
     return i;
 }
 
-struct bb *new_bb(struct function *func, struct bb *prev) {
-    struct bb *bb = calloc(1, sizeof(struct bb));
-    bb->function = func;
-    list_push(&func->bbs, bb);
-    if (prev) list_push(&bb->inputs, prev);
-
-    return bb;
-}
-
 struct function *new_function() {
     struct function *function = calloc(1, sizeof(struct function));
-    new_bb(function, nullptr);
     return function;
 }
 
-struct ir_reg *new_reg(struct bb *bb) {
+struct ir_reg *new_reg(struct function *function) {
     reg *r = calloc(1, sizeof(struct ir_reg));
-    r->bb = bb;
-    return r;
-}
-
-struct ir_reg *new_phi(struct bb *bb, struct scope *scope) {
-    reg *r = new_reg(bb);
-    r->is_phi = true;
-    r->scope = scope;
-    r->index = 0;
+    r->function = function;
     return r;
 }
 
 struct ir_reg *new_temporary(struct function *function) {
-    reg *r = new_reg(active_bb(function));
+    reg *r = new_reg(function);
     r->index = function->temporary_id++;
     return r;
 }
 
 static struct ir_reg *new_scope_reg(struct function *function, struct scope *scope, bool write) {
     if (write) scope->ir_index += 1;
-    reg *r = new_reg(active_bb(function));
+    reg *r = new_reg(function);
     r->scope = scope;
     r->index = (short)scope->ir_index;
     return r;
 }
 
-static struct ir_reg *new_scope_reg_bb(struct bb *bb, struct scope *scope, bool write) {
-    if (write) scope->ir_index += 1;
-    reg *r = new_reg(bb);
-    r->scope = scope;
-    r->index = (short)scope->ir_index;
-    return r;
-}
-
-void bb_own(struct bb *bb, struct ir_reg *reg);
-
-static struct ir_reg *lookup_ident_decl(struct tu *tu, struct function *function, struct scope *scope) {
-    struct bb *bb = active_bb(function);
-    reg *r = new_scope_reg(function, scope, true);
-    bb_own(bb, r);
-    return r;
-}
-
-struct ir_reg *bb_owns(struct bb *bb, struct scope *scope) {
-    if (bb->owned_vars.len == 0) return nullptr;
-
-    for_each (&bb->owned_vars) {
-        if ((*it)->scope == scope) {
-            return *it;
-        }
-    }
-    return nullptr;
-}
-
-void bb_own(struct bb *bb, struct ir_reg *reg) {
-    if (!reg->scope) return;
-
-    for_each (&bb->owned_vars) {
-        if ((*it)->scope == reg->scope) {
-            *it = reg;
-            return;
-        }
-    }
-
-    list_push(&bb->owned_vars, reg);
-}
-
-struct ir_reg *try_remove_trivial_phi(struct ir_reg *phi) {
-     if (phi->phi_list.len == 0) {
-         reg *r = new_scope_reg_bb(phi->bb, phi->scope, false);
-         bb_own(phi->bb, r);
-         return r;
-     }
-
-     if (phi->phi_list.len == 1) {
-         reg *r = phi->phi_list.data[0];
-         return r;
-     }
-
-     for_each (&phi->phi_dependants) {
-         try_remove_trivial_phi(*it);
-     }
-
-    // It's not trivial
-    return phi;
-}
-
-
-struct ir_reg *lookup_ident_2_global(struct tu *tu, struct bb *bb, struct scope *scope);
-
-struct ir_reg *lookup_ident_2_local(struct tu *tu, struct bb *bb, struct scope *scope, bool write) {
-    if (write) {
-        return new_scope_reg_bb(bb, scope, true);
-    }
-
-    reg *r;
-    if ((r = bb_owns(bb, scope))) {
-        return r;
-    }
-
-    return lookup_ident_2_global(tu, bb, scope);
-}
-
-void add_phi_operands(struct tu *tu, struct bb *bb, struct ir_reg *phi) {
-    for_each (&bb->inputs) {
-        reg *r = lookup_ident_2_local(tu, *it, phi->scope, false);
-
-        list_push(&phi->phi_list, r);
-    }
-}
-
-struct ir_reg *lookup_ident_2_global(struct tu *tu, struct bb *bb, struct scope *scope) {
-    if (!bb->sealed) {
-        reg *phi = new_phi(bb, scope);
-        list_push(&bb->incomplete_phis, phi);
-        return phi;
-    }
-
-    if (bb->inputs.len == 1) {
-        return lookup_ident_2_local(tu, bb->inputs.data[0], scope, false);
-    }
-
-    reg *phi = new_phi(bb, scope);
-    list_push(&phi->phi_list, phi);
-    add_phi_operands(tu, bb, phi);
-
-    reg *tmp = new_temporary(bb->function);
-    tmp->scope = scope;
-    bb_own(bb, tmp);
-
-    ir i = ir_move(tmp, phi);
-    list_push(&bb->ir_list, i);
-
-    return tmp;
-}
-
-void bb_seal(struct tu *tu, struct bb *bb) {
-    bb->sealed = true;
-
-    if (bb->incomplete_phis.len == 0) return;
-
-    for_each_n (phi, &bb->incomplete_phis) {
-        for_each_n (ibb, &bb->inputs) {
-            reg *input = lookup_ident_2_local(tu, *ibb, (*phi)->scope, false);
-            if (input) list_push(&(*phi)->phi_list, input);
-        }
-    }
-
-    list_clear(&bb->incomplete_phis);
-}
-
-void bb_fill(struct tu *tu, struct bb *bb) {
-    bb->filled = true;
-}
-
-struct ir_reg *bb_emit_node(struct tu *tu, struct function *function, struct node *node, bool write) {
-#define ACTIVE_BB list_last(&function->bbs)
-#define EMIT(i) list_push(&ACTIVE_BB->ir_list, (i))
+struct ir_reg *emit_node_recur(struct tu *tu, struct function *function, struct node *node, bool write) {
+#define EMIT(i) list_push(&function->ir_list, (i))
 
     switch (node->type) {
     case NODE_ROOT:
         for_each (&node->root.children) {
-            bb_emit_node(tu, function, *it, false);
+            emit_node_recur(tu, function, *it, false);
         }
         return nullptr;
     case NODE_BINARY_OP: {
@@ -467,13 +274,13 @@ struct ir_reg *bb_emit_node(struct tu *tu, struct function *function, struct nod
             return nullptr;
         }
         if (op == MOVE) {
-            reg *lhs = bb_emit_node(tu, function, node->binop.lhs, true);
-            reg *rhs = bb_emit_node(tu, function, node->binop.rhs, false);
+            reg *lhs = emit_node_recur(tu, function, node->binop.lhs, true);
+            reg *rhs = emit_node_recur(tu, function, node->binop.rhs, false);
             EMIT(ir_move(lhs, rhs));
             return lhs;
         } else {
-            reg *lhs = bb_emit_node(tu, function, node->binop.lhs, true);
-            reg *rhs = bb_emit_node(tu, function, node->binop.rhs, false);
+            reg *lhs = emit_node_recur(tu, function, node->binop.lhs, true);
+            reg *rhs = emit_node_recur(tu, function, node->binop.rhs, false);
             reg *res = new_temporary(function);
             EMIT(ir_binop(op, res, lhs, rhs));
             return res;
@@ -485,7 +292,7 @@ struct ir_reg *bb_emit_node(struct tu *tu, struct function *function, struct nod
         break;
     case NODE_IDENT: {
         struct scope *scope = TSCOPE(node->ident.scope_id);
-        return lookup_ident_2_local(tu, ACTIVE_BB, scope, write);
+        return new_scope_reg(function, scope, false);
     }
     case NODE_INT_LITERAL: {
         reg *res = new_temporary(function);
@@ -507,16 +314,16 @@ struct ir_reg *bb_emit_node(struct tu *tu, struct function *function, struct nod
     case NODE_FUNCTION_CALL: {
         struct ir_instr ins = {};
         for_each (&node->funcall.args) {
-            list_push(&ins.args, bb_emit_node(tu, function, *it, false));
+            list_push(&ins.args, emit_node_recur(tu, function, *it, false));
         }
-        reg *f = bb_emit_node(tu, function, node->funcall.inner, false);
+        reg *f = emit_node_recur(tu, function, node->funcall.inner, false);
         reg *out = new_temporary(function);
         EMIT(ir_call(out, f, ins.args));
         return out;
     }
     case NODE_DECLARATION:
         for_each (&node->decl.declarators) {
-            bb_emit_node(tu, function, *it, false);
+            emit_node_recur(tu, function, *it, false);
         }
         return nullptr;
     case NODE_TYPE_SPECIFIER:
@@ -524,8 +331,8 @@ struct ir_reg *bb_emit_node(struct tu *tu, struct function *function, struct nod
     case NODE_DECLARATOR:
         if (node->d.initializer) {
             struct scope *scope = TSCOPE(node->d.scope_id);
-            reg *init = bb_emit_node(tu, function, node->d.initializer, false);
-            reg *out = lookup_ident_decl(tu, function, scope);
+            reg *init = emit_node_recur(tu, function, node->d.initializer, false);
+            reg *out = new_scope_reg(function, scope, true);
             EMIT(ir_move(out, init));
         }
         return nullptr;
@@ -533,55 +340,35 @@ struct ir_reg *bb_emit_node(struct tu *tu, struct function *function, struct nod
         break;
     case NODE_FUNCTION_DECLARATOR:
         break;
-    case NODE_FUNCTION_DEFINITION:
-        bb_emit_node(tu, function, node->fun.decl, false);
-        bb_emit_node(tu, function, node->fun.body, false);
+    case NODE_FUNCTION_DEFINITION:emit_node_recur(tu, function, node->fun.decl, false);
+        emit_node_recur(tu, function, node->fun.body, false);
         return nullptr;
     case NODE_STATIC_ASSERT:
         break;
     case NODE_BLOCK:
         for_each (&node->block.children) {
-            bb_emit_node(tu, function, *it, false);
+            emit_node_recur(tu, function, *it, false);
         }
         return nullptr;
     case NODE_LABEL:
         break;
     case NODE_RETURN: {
-        reg *ret = bb_emit_node(tu, function, node->ret.expr, false);
+        reg *ret = emit_node_recur(tu, function, node->ret.expr, false);
         EMIT(ir_ret(ret));
         return nullptr;
     }
     case NODE_IF: {
-        reg *test = bb_emit_node(tu, function, node->if_.cond, false);
+        reg *test = emit_node_recur(tu, function, node->if_.cond, false);
         const char *label_false = tprintf(tu, "if%i.false", ++function->cond_id);
         const char *label_end = tprintf(tu, "if%i.end", function->cond_id);
 
         EMIT(ir_jz(label_false, test));
 
-        struct bb *bb_before_if = ACTIVE_BB;
-        bb_fill(tu, ACTIVE_BB);
-
-        struct bb *bb_true = new_bb(function, bb_before_if);
-        bb_seal(tu, bb_true);
-
-        bb_true->name = "if.true";
-        bb_emit_node(tu, function, node->if_.block_true, false);
+        emit_node_recur(tu, function, node->if_.block_true, false);
         EMIT(ir_jmp(label_end));
-        bb_fill(tu, ACTIVE_BB);
 
-        struct bb *bb_false = new_bb(function, bb_before_if);
-        bb_seal(tu, bb_false);
-
-        bb_false->name = "if.false";
         EMIT(ir_label(label_false));
-        bb_emit_node(tu, function, node->if_.block_false, false);
-        bb_fill(tu, ACTIVE_BB);
-
-        struct bb *bb_end = new_bb(function, bb_true);
-        bb_end->name = "if.end";
-        list_push(&bb_end->inputs, bb_false);
-        bb_seal(tu, bb_end);
-
+        emit_node_recur(tu, function, node->if_.block_false, false);
         EMIT(ir_label(label_end));
 
         return nullptr;
@@ -590,32 +377,13 @@ struct ir_reg *bb_emit_node(struct tu *tu, struct function *function, struct nod
         const char *label_top = tprintf(tu, "while%i.top", ++function->cond_id);
         const char *label_end = tprintf(tu, "while%i.end", function->cond_id);
 
-        struct bb *bb_before_while = ACTIVE_BB;
-        bb_fill(tu, ACTIVE_BB);
-
-        struct bb *bb_test = new_bb(function, bb_before_while);
-        bb_test->name = "while.test";
         EMIT(ir_label(label_top));
-        reg *test = bb_emit_node(tu, function, node->while_.cond, false);
+        reg *test = emit_node_recur(tu, function, node->while_.cond, false);
         EMIT(ir_jz(label_end, test));
-        bb_fill(tu, bb_test);
 
-        struct bb *bb_body = new_bb(function, bb_test);
-        bb_seal(tu, bb_body);
-        bb_body->name = "while.body";
-        bb_emit_node(tu, function, node->while_.block, false);
+        emit_node_recur(tu, function, node->while_.block, false);
         EMIT(ir_jmp(label_top));
-        bb_fill(tu, bb_body);
-
-        struct bb *bb_body_end = ACTIVE_BB;
-
-        struct bb *bb_end = new_bb(function, bb_test);
-        bb_seal(tu, bb_end);
-        bb_end->name = "while.end";
         EMIT(ir_label(label_end));
-
-        list_push(&bb_test->inputs, bb_body_end);
-        bb_seal(tu, bb_test);
 
         return nullptr;
     }
@@ -631,17 +399,23 @@ struct ir_reg *bb_emit_node(struct tu *tu, struct function *function, struct nod
         break;
     case NODE_NULL:
         break;
-    case NODE_BREAK:break;
-    case NODE_CONTINUE:break;
-    case NODE_DEFAULT:break;
-    case NODE_STRUCT:break;
-    case NODE_ENUM:break;
-    case NODE_UNION:break;
+    case NODE_BREAK:
+        break;
+    case NODE_CONTINUE:
+        break;
+    case NODE_DEFAULT:
+        break;
+    case NODE_STRUCT:
+        break;
+    case NODE_ENUM:
+        break;
+    case NODE_UNION:
+        break;
     }
 
     fprintf(stderr, "unhandled node: %i\n", node->type);
 
     return nullptr;
 
-#undef ACTIVE_BB
+#undef EMIT
 }

@@ -37,16 +37,12 @@ enum ir_op : char {
 };
 
 typedef list(struct ir_instr) ir_list_t;
-typedef list(struct bb *) bb_list_t;
 typedef list(struct ir_reg *) reg_list_t;
 
 struct ir_reg {
     struct scope *scope;
-    reg_list_t phi_list;
-    reg_list_t phi_dependants;
-    struct bb *bb;
+    struct function *function;
     short index;
-    bool is_phi;
 };
 
 struct ir_instr {
@@ -58,22 +54,10 @@ struct ir_instr {
     enum ir_op op;
 };
 
-struct bb {
-    const char *name;
-    struct function *function;
-    ir_list_t ir_list;
-    bb_list_t inputs;
-    bb_list_t outputs;
-    reg_list_t owned_vars;
-    reg_list_t incomplete_phis;
-    bool filled;
-    bool sealed;
-};
-
 struct function {
-    bb_list_t bbs;
     short temporary_id;
     short cond_id;
+    ir_list_t ir_list;
 };
 
 typedef struct ir_instr ir;
