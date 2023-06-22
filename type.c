@@ -184,6 +184,93 @@ int find_or_create_decl_type(struct tu *tu, struct node *decl, struct node *d) {
     return decltype;
 }
 
+size_t type_size(struct tu *tu, int type_id) {
+    struct type *type = TYPE(type_id);
+
+    switch (type->layer) {
+    case TYPE_COMPLEX_DOUBLE:
+    case TYPE_COMPLEX_LONG_DOUBLE:
+        return 16;
+    case TYPE_POINTER:
+    case TYPE_SIGNED_LONG:
+    case TYPE_UNSIGNED_LONG:
+    case TYPE_SIGNED_LONG_LONG:
+    case TYPE_UNSIGNED_LONG_LONG:
+    case TYPE_DOUBLE:
+    case TYPE_LONG_DOUBLE:
+    case TYPE_COMPLEX_FLOAT:
+        return 8;
+    case TYPE_SIGNED_INT:
+    case TYPE_UNSIGNED_INT:
+    case TYPE_FLOAT:
+        return 4;
+    case TYPE_SIGNED_SHORT:
+    case TYPE_UNSIGNED_SHORT:
+        return 2;
+    case TYPE_SIGNED_CHAR:
+    case TYPE_UNSIGNED_CHAR:
+    case TYPE_BOOL:
+        return 1;
+    case TYPE_ENUM:
+        return type_size(tu, type->inner);
+    case TYPE_VOID:
+        return 0;
+    case TYPE_STRUCT:
+    case TYPE_UNION:
+        report_error(tu, "struct and union type sizes are not implemented");
+        return 0;
+    case TYPE_ARRAY:
+        report_error(tu, "array type sizes are not implemented");
+        return 0;
+    case TYPE_FUNCTION:
+        report_error(tu, "function types do not have a size");
+        return 0;
+    }
+}
+
+size_t type_align(struct tu *tu, int type_id) {
+    struct type *type = TYPE(type_id);
+
+    switch (type->layer) {
+    case TYPE_COMPLEX_DOUBLE:
+    case TYPE_COMPLEX_LONG_DOUBLE:
+    case TYPE_POINTER:
+    case TYPE_SIGNED_LONG:
+    case TYPE_UNSIGNED_LONG:
+    case TYPE_SIGNED_LONG_LONG:
+    case TYPE_UNSIGNED_LONG_LONG:
+    case TYPE_DOUBLE:
+    case TYPE_LONG_DOUBLE:
+    case TYPE_COMPLEX_FLOAT:
+        return 8;
+    case TYPE_SIGNED_INT:
+    case TYPE_UNSIGNED_INT:
+    case TYPE_FLOAT:
+        return 4;
+    case TYPE_SIGNED_SHORT:
+    case TYPE_UNSIGNED_SHORT:
+        return 2;
+    case TYPE_SIGNED_CHAR:
+    case TYPE_UNSIGNED_CHAR:
+    case TYPE_BOOL:
+        return 1;
+    case TYPE_ENUM:
+        return type_align(tu, type->inner);
+    case TYPE_VOID:
+        return 0;
+    case TYPE_STRUCT:
+    case TYPE_UNION:
+        report_error(tu, "struct and union type sizes are not implemented");
+        return 0;
+    case TYPE_ARRAY:
+        return type_align(tu, type->inner);
+        return 0;
+    case TYPE_FUNCTION:
+        report_error(tu, "function types do not have an alignment");
+        return 0;
+    }
+}
+
 int token_cmp(struct tu *tu, struct token *a, struct token *b) {
     int len = a->len > b->len ? a->len : b->len;
     return strncmp(&tu->source[a->index], &tu->source[b->index], len);
