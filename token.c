@@ -264,7 +264,7 @@ static bool is_xdigit(char c) {
 }
 
 static void read_number(struct state *state) {
-    struct token *token = new(state, TOKEN_INT);
+    struct token *token = new(state, TOKEN_INT_LITERAL);
 
     const char *str = &CHAR(state);
     char *after = nullptr;
@@ -275,7 +275,7 @@ static void read_number(struct state *state) {
     token->int_.value = strtoull(str, &after, 0);
 
     if (*after == '.' || *after == 'e' || *after == 'p') {
-        token->type = TOKEN_FLOAT;
+        token->type = TOKEN_FLOAT_LITERAL;
         token->float_.value = strtod(str, &after);
     }
 
@@ -290,7 +290,7 @@ static void read_number(struct state *state) {
 }
 
 static void read_string(struct state *state) {
-    struct token *token = new(state, TOKEN_STRING);
+    struct token *token = new(state, TOKEN_STRING_LITERAL);
 
     eat(state, '"');
     // TODO: escaping "s
@@ -303,7 +303,7 @@ static void read_string(struct state *state) {
 }
 
 static void read_char(struct state *state) {
-    struct token *token = new(state, TOKEN_INT);
+    struct token *token = new(state, TOKEN_INT_LITERAL);
     uint64_t value = 0;
 #define VALUE_PUSH(v) (value <<= 8, value |= (v))
 #define ESCAPE_CASE(l, e) case (l): VALUE_PUSH((e)); break
@@ -410,13 +410,13 @@ static void read_symbol(struct state *state) {
     case '|':
         if (pull(state, '|')) {
             if (pull(state, '=')) token->type = TOKEN_OR_EQUAL;
-            else token->type = TOKEN_OR;
+            else token->type = TOKEN_OR_OR;
         } else if (pull(state, '=')) token->type = TOKEN_BITOR_EQUAL;
         break;
     case '&':
         if (pull(state, '&')) {
             if (pull(state, '=')) token->type = TOKEN_AND_EQUAL;
-            else token->type = TOKEN_AND;
+            else token->type = TOKEN_AND_AND;
         } else if (pull(state, '=')) token->type = TOKEN_BITAND_EQUAL;
         break;
     case '.':
@@ -448,9 +448,9 @@ void print_token_type(struct token *token) {
 #define CASE(tt, str) case (tt): fputs((str), stdout); break;
     CASE(TOKEN_NULL, "null")
     CASE(TOKEN_IDENT, "ident")
-    CASE(TOKEN_INT, "int")
-    CASE(TOKEN_FLOAT, "float")
-    CASE(TOKEN_STRING, "string")
+    CASE(TOKEN_INT_LITERAL, "int")
+    CASE(TOKEN_FLOAT_LITERAL, "float")
+    CASE(TOKEN_STRING_LITERAL, "string")
     CASE(TOKEN_EOF, "eof")
     CASE(TOKEN_ARROW, "->")
     CASE(TOKEN_EQUAL_EQUAL, "==")
@@ -467,8 +467,8 @@ void print_token_type(struct token *token) {
     CASE(TOKEN_BITAND_EQUAL, "&=")
     CASE(TOKEN_BITOR_EQUAL, "|=")
     CASE(TOKEN_BITXOR_EQUAL, "^=")
-    CASE(TOKEN_AND, "&&")
-    CASE(TOKEN_OR, "||")
+    CASE(TOKEN_AND_AND, "&&")
+    CASE(TOKEN_OR_OR, "||")
     CASE(TOKEN_PLUS_PLUS, "++")
     CASE(TOKEN_MINUS_MINUS, "--")
     CASE(TOKEN_SHIFT_RIGHT, ">>")
@@ -480,6 +480,10 @@ void print_token_type(struct token *token) {
 #undef CASE
     }
     putchar(')');
+}
+
+void print_token(struct tu *tu, struct token *token) {
+    fprintf(stderr, "%.*s", token->len, &tu->source[token->index]);
 }
 
 void print_tokens(struct tu *tu) {
@@ -522,9 +526,9 @@ const char *token_type_string(int token_type) {
 #define CASE(tt, str) case (tt): return str;
     CASE(TOKEN_NULL, "null")
     CASE(TOKEN_IDENT, "ident")
-    CASE(TOKEN_INT, "int")
-    CASE(TOKEN_FLOAT, "float")
-    CASE(TOKEN_STRING, "string")
+    CASE(TOKEN_INT_LITERAL, "int")
+    CASE(TOKEN_FLOAT_LITERAL, "float")
+    CASE(TOKEN_STRING_LITERAL, "string")
     CASE(TOKEN_EOF, "eof")
     CASE(TOKEN_ARROW, "->")
     CASE(TOKEN_EQUAL_EQUAL, "==")
@@ -541,8 +545,8 @@ const char *token_type_string(int token_type) {
     CASE(TOKEN_BITAND_EQUAL, "&=")
     CASE(TOKEN_BITOR_EQUAL, "|=")
     CASE(TOKEN_BITXOR_EQUAL, "^=")
-    CASE(TOKEN_AND, "&&")
-    CASE(TOKEN_OR, "||")
+    CASE(TOKEN_AND_AND, "&&")
+    CASE(TOKEN_OR_OR, "||")
     CASE(TOKEN_PLUS_PLUS, "++")
     CASE(TOKEN_MINUS_MINUS, "--")
     CASE(TOKEN_SHIFT_RIGHT, ">>")

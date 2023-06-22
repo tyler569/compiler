@@ -11,10 +11,6 @@
 #define SCOPE(n) list_ptr(&context->tu->scopes, n)
 #define TSCOPE(n) list_ptr(&tu->scopes, n)
 
-void print_token(struct tu *tu, struct token *token) {
-    fprintf(stderr, "%.*s", token->len, &tu->source[token->index]);
-}
-
 void print_ir_reg_name(struct ir_reg *reg) {
     fprintf(stderr, "r%i", reg->index);
 }

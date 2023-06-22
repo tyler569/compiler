@@ -23,27 +23,7 @@ struct context {
     int position;
     const char *source;
     int errors;
-
-    node_list_t global_declarations;
-    struct node *function;
-    struct node *switch_;
-    struct node *breakable;
 };
-
-static struct context child_context(struct context *context) {
-    return (struct context){
-        .tu = context->tu,
-        .tokens = context->tokens,
-        .position = context->position,
-        .source = context->source,
-        .errors = context->errors,
-    };
-}
-
-static void close_context(struct context *context, struct context *child) {
-    context->position = child->position;
-    context->errors = child->errors;
-}
 
 
 // static functions
@@ -437,12 +417,12 @@ static struct node *parse_ident(struct context *context) {
 
 static struct node *parse_primary_expression(struct context *context) {
     switch (TOKEN(context)->type) {
-    case TOKEN_INT: {
+    case TOKEN_INT_LITERAL: {
         struct node *node = new(context, NODE_INT_LITERAL);
         pass(context);
         return node;
     }
-    case TOKEN_FLOAT: {
+    case TOKEN_FLOAT_LITERAL: {
         struct node *node = new(context, NODE_FLOAT_LITERAL);
         pass(context);
         return node;
@@ -452,7 +432,7 @@ static struct node *parse_primary_expression(struct context *context) {
         pass(context);
         return node;
     }
-    case TOKEN_STRING: {
+    case TOKEN_STRING_LITERAL: {
         struct node *node = new(context, NODE_STRING_LITERAL);
         pass(context);
         return node;
@@ -567,8 +547,8 @@ PARSE_BINOP(parse_eq, parse_rel, token->type == TOKEN_EQUAL_EQUAL || token->type
 PARSE_BINOP(parse_bitand, parse_eq, token->type == '&')
 PARSE_BINOP(parse_bitxor, parse_bitand, token->type == '^')
 PARSE_BINOP(parse_bitor, parse_bitxor, token->type == '|')
-PARSE_BINOP(parse_and, parse_bitor, token->type == TOKEN_AND)
-PARSE_BINOP(parse_or, parse_and, token->type == TOKEN_OR)
+PARSE_BINOP(parse_and, parse_bitor, token->type == TOKEN_AND_AND)
+PARSE_BINOP(parse_or, parse_and, token->type == TOKEN_OR_OR)
 
 static struct node *parse_ternary_expression(struct context *context) {
     struct node *condition = parse_or(context);
@@ -639,9 +619,9 @@ static bool is_bare_type_specifier(struct token *token) {
     return token->type == TOKEN_VOID ||
         token->type == TOKEN_CHAR ||
         token->type == TOKEN_SHORT ||
-        token->type == TOKEN_INT_ ||
+           token->type == TOKEN_INT ||
         token->type == TOKEN_LONG ||
-        token->type == TOKEN_FLOAT ||
+           token->type == TOKEN_FLOAT_LITERAL ||
         token->type == TOKEN_DOUBLE ||
         token->type == TOKEN_SIGNED ||
         token->type == TOKEN_BOOL ||
@@ -820,7 +800,7 @@ static struct node *parse_static_assert_declaration(struct context *context) {
     node->st_assert.expr = parse_assignment_expression(context);
     if (TOKEN(context)->type == ',') {
         eat(context, ',');
-        if (TOKEN(context)->type == TOKEN_STRING) {
+        if (TOKEN(context)->type == TOKEN_STRING_LITERAL) {
             node->st_assert.message = report_error_node(context, "static assert string literals not supported");
         } else {
             node->st_assert.message = report_error_node(context, "static assert message must be string literal");
@@ -858,10 +838,10 @@ static struct node *parse_declaration_specifier_list(struct context *context, st
         [TOKEN_CHAR] = SEEN_TOKEN_CHAR | SEEN_TOKEN_SHORT | SEEN_TOKEN_LONG | SEEN_FLOAT,
         [TOKEN_SHORT] = SEEN_TOKEN_CHAR | SEEN_TOKEN_LONG | SEEN_FLOAT,
         [TOKEN_LONG] = SEEN_TOKEN_CHAR | SEEN_TOKEN_LONG_TWICE | SEEN_TOKEN_FLOAT,
-        [TOKEN_INT_] = SEEN_TOKEN_CHAR | SEEN_TOKEN_INT | SEEN_FLOAT,
+        [TOKEN_INT] = SEEN_TOKEN_CHAR | SEEN_TOKEN_INT | SEEN_FLOAT,
         [TOKEN_SIGNED] = SEEN_TOKEN_UNSIGNED | SEEN_FLOAT,
         [TOKEN_UNSIGNED] = SEEN_TOKEN_SIGNED | SEEN_FLOAT,
-        [TOKEN_FLOAT_] = SEEN_TOKEN_CHAR | SEEN_TOKEN_SHORT | SEEN_TOKEN_LONG | SEEN_TOKEN_INT | SEEN_TOKEN_SIGNED |
+        [TOKEN_FLOAT] = SEEN_TOKEN_CHAR | SEEN_TOKEN_SHORT | SEEN_TOKEN_LONG | SEEN_TOKEN_INT | SEEN_TOKEN_SIGNED |
                         SEEN_TOKEN_UNSIGNED,
         [TOKEN_DOUBLE] = SEEN_TOKEN_CHAR | SEEN_TOKEN_SHORT | SEEN_TOKEN_INT | SEEN_TOKEN_SIGNED | SEEN_TOKEN_UNSIGNED,
     };
@@ -949,7 +929,7 @@ static struct node *parse_declaration_specifier_list(struct context *context, st
             else if (base_type == 0) base_type = TYPE_SIGNED_LONG;
             else goto error;
             break;
-        case TOKEN_INT_:
+        case TOKEN_INT:
             state |= SEEN_TOKEN_INT;
             if (base_type == TYPE_SIGNED_SHORT) {}
             else if (base_type == TYPE_SIGNED_INT) goto error;
@@ -981,7 +961,7 @@ static struct node *parse_declaration_specifier_list(struct context *context, st
             else if (base_type == 0) base_type = TYPE_UNSIGNED_INT;
             else goto error;
             break;
-        case TOKEN_FLOAT_:
+        case TOKEN_FLOAT:
             state |= SEEN_TOKEN_FLOAT;
             if (base_type == 0) base_type = TYPE_FLOAT;
             else goto error;
@@ -1167,17 +1147,14 @@ static struct node *parse_for_statement(struct context *context) {
 }
 
 static struct node *parse_switch_statement(struct context *context) {
-    struct context switch_context = child_context(context);
-    struct node *node = new(&switch_context, NODE_SWITCH);
-    switch_context.switch_ = node;
-    eat(&switch_context, TOKEN_SWITCH);
-    eat(&switch_context, '(');
-    struct node *expr = parse_expression(&switch_context);
-    eat(&switch_context, ')');
-    struct node *block = parse_statement(&switch_context);
+    struct node *node = new(context, NODE_SWITCH);
+    eat(context, TOKEN_SWITCH);
+    eat(context, '(');
+    struct node *expr = parse_expression(context);
+    eat(context, ')');
+    struct node *block = parse_statement(context);
     node->switch_.expr = expr;
     node->switch_.block = block;
-    close_context(context, &switch_context);
     return node;
 }
 
@@ -1187,9 +1164,6 @@ static struct node *parse_case_statement(struct context *context) {
     struct node *value = parse_expression(context);
     eat(context, ':');
     node->case_.value = value;
-
-    if (context->switch_) list_push(&context->switch_->switch_.cases, node);
-    else return report_error_node(context, "case statement found outside switch");
 
     return node;
 }
@@ -1272,12 +1246,10 @@ static struct node *parse_statement(struct context *context) {
 }
 
 static struct node *parse_function_definition(struct context *context) {
-    struct context function_context = child_context(context);
-    struct node *node = new(&function_context, NODE_FUNCTION_DEFINITION);
-    function_context.function = node;
-    node->fun.decl = parse_single_declaration(&function_context);
-    node->fun.body = parse_compound_statement(&function_context);
-    close_context(context, &function_context);
+    struct node *node = new(context, NODE_FUNCTION_DEFINITION);
+    node->fun.decl = parse_single_declaration(context);
+    node->fun.body = parse_compound_statement(context);
+    node->fun.d = node->fun.decl->decl.declarators.data[0];
     return node;
 }
 

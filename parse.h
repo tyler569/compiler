@@ -121,6 +121,7 @@ struct node {
         struct {
             struct node *decl;
             struct node *body;
+            struct node *d;
         } fun;
         struct {
             struct node *name;
@@ -159,6 +160,9 @@ struct node {
             struct node *name;
             node_list_t decls;
         } struct_;
+        struct {
+            struct node *breakable;
+        } break_;
     };
 };
 

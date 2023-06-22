@@ -8,9 +8,9 @@ enum {
     TOKEN_NULL = 0,
     // elements
     TOKEN_IDENT = 128,
-    TOKEN_INT,
-    TOKEN_FLOAT,
-    TOKEN_STRING,
+    TOKEN_INT_LITERAL,
+    TOKEN_FLOAT_LITERAL,
+    TOKEN_STRING_LITERAL,
     TOKEN_EOF,
     // operators with more than 1 byte
     TOKEN_ARROW,
@@ -28,8 +28,8 @@ enum {
     TOKEN_BITAND_EQUAL,
     TOKEN_BITOR_EQUAL,
     TOKEN_BITXOR_EQUAL,
-    TOKEN_AND,
-    TOKEN_OR,
+    TOKEN_AND_AND,
+    TOKEN_OR_OR,
     TOKEN_PLUS_PLUS,
     TOKEN_MINUS_MINUS,
     TOKEN_SHIFT_RIGHT,
@@ -57,12 +57,12 @@ enum {
     TOKEN_ENUM,
     TOKEN_EXTERN,
     TOKEN_FALSE,
-    TOKEN_FLOAT_,
+    TOKEN_FLOAT,
     TOKEN_FOR,
     TOKEN_GOTO,
     TOKEN_IF,
     TOKEN_INLINE,
-    TOKEN_INT_,
+    TOKEN_INT,
     TOKEN_LONG,
     TOKEN_NULLPTR,
     TOKEN_REGISTER,
@@ -121,6 +121,7 @@ int tokenize(struct tu *);
 
 void print_tokens(struct tu *);
 
+void print_token(struct tu *tu, struct token *token);
 void print_token_type(struct token *);
 const char *token_type_string(int token_type);
 
