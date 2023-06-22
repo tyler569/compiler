@@ -24,6 +24,8 @@ enum layer_type {
     TYPE_COMPLEX_DOUBLE,
     TYPE_COMPLEX_LONG_DOUBLE,
 
+    TYPE_AUTO,
+
     TYPE_POINTER,
     TYPE_ARRAY,
     TYPE_FUNCTION,
@@ -95,6 +97,7 @@ struct scope {
     int parent;
     int block_depth;
     int ir_index;
+    int frame_offset;
 };
 
 struct tu;

@@ -153,6 +153,7 @@ struct node {
         struct {
             struct node *expr;
             struct node *block;
+            node_list_t cases;
         } switch_;
         struct {
             struct node *name;

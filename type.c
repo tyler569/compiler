@@ -121,6 +121,20 @@ void print_type(struct tu *tu, int type_id) {
     }
 }
 
+void print_storage_class(enum storage_class class) {
+    switch (class) {
+#define CASE(sc, name) case sc: fprintf(stderr, "%s ", name); break
+    CASE(ST_TYPEDEF, "typedef");
+    CASE(ST_THREAD_LOCAL, "thead_local");
+    CASE(ST_AUTOMATIC, "auto");
+    CASE(ST_CONSTEXPR, "constexpr");
+    CASE(ST_EXTERNAL, "extern");
+    CASE(ST_REGISTER, "register");
+    CASE(ST_STATIC, "static");
+#undef CASE
+    }
+}
+
 static int debug_create_type(struct tu *tu, int parent, enum layer_type base, enum type_flags flags) {
     struct type *type = new_type(tu);
     type->inner = parent;
@@ -225,6 +239,9 @@ size_t type_size(struct tu *tu, int type_id) {
     case TYPE_FUNCTION:
         report_error(tu, "function types do not have a size");
         return 0;
+    case TYPE_AUTO:
+        report_error(tu, "invalid! auto must be resolved before this point");
+        return 0;
     }
 }
 
@@ -268,6 +285,9 @@ size_t type_align(struct tu *tu, int type_id) {
     case TYPE_FUNCTION:
         report_error(tu, "function types do not have an alignment");
         return 0;
+    case TYPE_AUTO:
+        report_error(tu, "invalid! auto must be resolved before this point");
+        return 0;
     }
 }
 
@@ -289,18 +309,21 @@ int resolve_name(struct tu *tu, struct token *token, int sc) {
     return 0;
 }
 
-int create_scope(struct tu *tu, int parent, int c_type, int depth, struct node *decl) {
+int create_scope(struct tu *tu, int parent, int c_type, int depth, enum storage_class sc, struct node *d, struct node *function) {
     struct scope *scope = new_scope(tu);
+    struct scope *parent_scope = SCOPE(parent);
 
-    assert(decl->d.name);
+    assert(d->d.name);
 
-    scope->token = decl->d.name;
-    scope->decl = decl;
+    scope->token = d->d.name;
+    scope->decl = d;
     scope->parent = parent;
     scope->c_type = c_type;
     scope->block_depth = depth;
+    scope->sc = sc;
 
     fprintf(stderr, "%.*s has type ", scope->token->len, TOKEN_STR(scope->token));
+    print_storage_class(sc);
     print_type(tu, c_type);
     fprintf(stderr, "\n");
 
@@ -341,7 +364,7 @@ int type_recur(struct tu *tu, struct node *node, int block_depth, int parent_sco
                 print_info_node(tu, before->decl, "previous definition is here");
             }
             int type_id = find_or_create_decl_type(tu, node, d);
-            scope = create_scope(tu, scope, type_id, block_depth, d);
+            scope = create_scope(tu, scope, type_id, block_depth, node->decl.sc, d, nullptr);
 
             d->d.scope_id = scope;
 

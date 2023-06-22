@@ -24,8 +24,27 @@ struct context {
     const char *source;
     int errors;
 
-    struct node *root;
+    node_list_t global_declarations;
+    struct node *function;
+    struct node *switch_;
+    struct node *breakable;
 };
+
+static struct context child_context(struct context *context) {
+    return (struct context){
+        .tu = context->tu,
+        .tokens = context->tokens,
+        .position = context->position,
+        .source = context->source,
+        .errors = context->errors,
+    };
+}
+
+static void close_context(struct context *context, struct context *child) {
+    context->position = child->position;
+    context->errors = child->errors;
+}
+
 
 // static functions
 static bool is_typename(struct context *, struct token *first, size_t count);
@@ -54,7 +73,6 @@ int parse(struct tu *tu) {
     root->token = tu->tokens;
     root->type = NODE_ROOT;
     int n = 0;
-    context->root = root;
 
     while (more_data(context) && context->errors == 0) {
         list_push(&root->root.children, parse_external_definition(context));
@@ -817,7 +835,7 @@ static struct node *parse_static_assert_declaration(struct context *context) {
 static struct node *parse_declaration_specifier_list(struct context *context, struct node *node) {
     enum layer_type base_type = 0;
     enum type_flags type_flags = 0;
-    enum storage_class sc = ST_AUTOMATIC;
+    enum storage_class sc = 0;
 
     enum parse_state {
         SEEN_TOKEN_CHAR = (1 << 0),
@@ -881,23 +899,30 @@ static struct node *parse_declaration_specifier_list(struct context *context, st
             type_flags |= TF_NORETURN;
             break;
 
-        // TODO: storage classes can overwrite others
+        case TOKEN_AUTO:
+
         case TOKEN_CONSTEXPR:
+            if (sc != 0) goto error;
             sc = ST_CONSTEXPR;
-                break;
+            break;
         case TOKEN_EXTERN:
+            if (sc != 0) goto error;
             sc = ST_EXTERNAL;
             break;
         case TOKEN_REGISTER:
+            if (sc != 0) goto error;
             sc = ST_REGISTER;
             break;
         case TOKEN_STATIC:
+            if (sc != 0) goto error;
             sc = ST_STATIC;
             break;
         case TOKEN_THREAD_LOCAL:
+            if (sc != 0) goto error;
             sc = ST_THREAD_LOCAL;
             break;
         case TOKEN_TYPEDEF:
+            if (sc != 0) goto error;
             sc = ST_TYPEDEF;
             break;
 
@@ -1142,14 +1167,17 @@ static struct node *parse_for_statement(struct context *context) {
 }
 
 static struct node *parse_switch_statement(struct context *context) {
-    struct node *node = new(context, NODE_SWITCH);
-    eat(context, TOKEN_SWITCH);
-    eat(context, '(');
-    struct node *expr = parse_expression(context);
-    eat(context, ')');
-    struct node *block = parse_statement(context);
+    struct context switch_context = child_context(context);
+    struct node *node = new(&switch_context, NODE_SWITCH);
+    switch_context.switch_ = node;
+    eat(&switch_context, TOKEN_SWITCH);
+    eat(&switch_context, '(');
+    struct node *expr = parse_expression(&switch_context);
+    eat(&switch_context, ')');
+    struct node *block = parse_statement(&switch_context);
     node->switch_.expr = expr;
     node->switch_.block = block;
+    close_context(context, &switch_context);
     return node;
 }
 
@@ -1159,6 +1187,10 @@ static struct node *parse_case_statement(struct context *context) {
     struct node *value = parse_expression(context);
     eat(context, ':');
     node->case_.value = value;
+
+    if (context->switch_) list_push(&context->switch_->switch_.cases, node);
+    else return report_error_node(context, "case statement found outside switch");
+
     return node;
 }
 
@@ -1240,9 +1272,12 @@ static struct node *parse_statement(struct context *context) {
 }
 
 static struct node *parse_function_definition(struct context *context) {
-    struct node *node = new(context, NODE_FUNCTION_DEFINITION);
-    node->fun.decl = parse_single_declaration(context);
-    node->fun.body = parse_compound_statement(context);
+    struct context function_context = child_context(context);
+    struct node *node = new(&function_context, NODE_FUNCTION_DEFINITION);
+    function_context.function = node;
+    node->fun.decl = parse_single_declaration(&function_context);
+    node->fun.body = parse_compound_statement(&function_context);
+    close_context(context, &function_context);
     return node;
 }
 
