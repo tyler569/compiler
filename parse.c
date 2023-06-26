@@ -131,6 +131,46 @@ static void print_space(int level) {
     for (int i = 0; i < level; i++) fputs("  ", stderr);
 }
 
+const char *node_type_strings[NODE_TYPE_COUNT] = {
+    [NODE_NULL] = "NODE_NULL",
+    [NODE_ROOT] = "NODE_ROOT",
+    [NODE_BINARY_OP] = "NODE_BINARY_OP",
+    [NODE_UNARY_OP] = "NODE_UNARY_OP",
+    [NODE_POSTFIX_OP] = "NODE_POSTFIX_OP",
+    [NODE_IDENT] = "NODE_IDENT",
+    [NODE_INT_LITERAL] = "NODE_INT_LITERAL",
+    [NODE_FLOAT_LITERAL] = "NODE_FLOAT_LITERAL",
+    [NODE_STRING_LITERAL] = "NODE_STRING_LITERAL",
+    [NODE_ERROR] = "NODE_ERROR",
+    [NODE_MEMBER] = "NODE_MEMBER",
+    [NODE_SUBSCRIPT] = "NODE_SUBSCRIPT",
+    [NODE_TERNARY] = "NODE_TERNARY",
+    [NODE_FUNCTION_CALL] = "NODE_FUNCTION_CALL",
+    [NODE_DECLARATION] = "NODE_DECLARATION",
+    [NODE_TYPE_SPECIFIER] = "NODE_TYPE_SPECIFIER",
+    [NODE_DECLARATOR] = "NODE_DECLARATOR",
+    [NODE_ARRAY_DECLARATOR] = "NODE_ARRAY_DECLARATOR",
+    [NODE_FUNCTION_DECLARATOR] = "NODE_FUNCTION_DECLARATOR",
+    [NODE_FUNCTION_DEFINITION] = "NODE_FUNCTION_DEFINITION",
+    [NODE_STATIC_ASSERT] = "NODE_STATIC_ASSERT",
+    [NODE_BLOCK] = "NODE_BLOCK",
+    [NODE_LABEL] = "NODE_LABEL",
+    [NODE_RETURN] = "NODE_RETURN",
+    [NODE_IF] = "NODE_IF",
+    [NODE_WHILE] = "NODE_WHILE",
+    [NODE_DO] = "NODE_DO",
+    [NODE_FOR] = "NODE_FOR",
+    [NODE_GOTO] = "NODE_GOTO",
+    [NODE_SWITCH] = "NODE_SWITCH",
+    [NODE_CASE] = "NODE_CASE",
+    [NODE_BREAK] = "NODE_BREAK",
+    [NODE_CONTINUE] = "NODE_CONTINUE",
+    [NODE_DEFAULT] = "NODE_DEFAULT",
+    [NODE_STRUCT] = "NODE_STRUCT",
+    [NODE_ENUM] = "NODE_ENUM",
+    [NODE_UNION] = "NODE_UNION",
+};
+
 #define RECUR(node) print_ast_recursive(nullptr, tu, (node), level + 1)
 #define RECUR_INFO(info, node) print_ast_recursive((info), tu, (node), level + 1)
 static void print_ast_recursive(const char *info, struct tu *tu, struct node *node, int level) {

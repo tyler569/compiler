@@ -44,11 +44,10 @@ enum node_type {
     NODE_ENUM,
     NODE_UNION,
 
+    NODE_TYPE_COUNT,
 };
 
-#define MAX_BLOCK_MEMBERS 10
-#define MAX_FUNCTION_ARGS 9
-#define MAX_DECLARATORS 9
+extern const char *node_type_strings[NODE_TYPE_COUNT];
 
 typedef list(struct node *) node_list_t;
 

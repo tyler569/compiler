@@ -447,7 +447,7 @@ struct ir_reg *emit_node_recur(struct tu *tu, struct function *function, struct 
         break;
     }
 
-    fprintf(stderr, "unhandled node: %i\n", node->type);
+    fprintf(stderr, "ir: unrecognised ast node %s\n", node_type_strings[node->type]);
 
     return nullptr;
 

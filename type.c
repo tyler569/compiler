@@ -447,6 +447,7 @@ int type_recur(struct tu *tu, struct node *node, int block_depth, int parent_sco
         return 0;
     }
     default:
+        fprintf(stderr, "typer: unrecognised ast node %s\n", node_type_strings[node->type]);
         return 0;
     }
 }
