@@ -1,7 +1,8 @@
 int print();
+int foo;
 
 int main(int argc, char **argv) {
-    int a, *b, c(), d[3];
+    int a, *b, c(), d[3], **e;
 
     if (a == *b) {
         switch (c()) {

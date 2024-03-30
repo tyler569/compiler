@@ -446,6 +446,22 @@ int type_recur(struct tu *tu, struct node *node, int block_depth, int parent_sco
         type_recur(tu, node->while_.block, block_depth + 1, scope);
         return 0;
     }
+    case NODE_DO: {
+        type_recur(tu, node->do_.cond, block_depth, scope);
+        type_recur(tu, node->do_.block, block_depth + 1, scope);
+        return 0;
+    }
+    case NODE_FOR: {
+        type_recur(tu, node->for_.init, block_depth, scope);
+        type_recur(tu, node->for_.cond, block_depth, scope);
+        type_recur(tu, node->for_.next, block_depth, scope);
+        type_recur(tu, node->for_.block, block_depth + 1, scope);
+        return 0;
+    }
+    case NODE_BREAK:
+    case NODE_CONTINUE:
+    case NODE_NULL:
+        break;
     default:
         fprintf(stderr, "typer: unrecognised ast node %s\n", node_type_strings[node->type]);
         return 0;

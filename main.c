@@ -35,6 +35,7 @@ int main(int argc, char **argv) {
         if (err < 0) {
             error_abort(tu, "unable to stat file %s (%s)", argv[1], strerror(errno));
         }
+        // TODO: mmap the file?
         char *s = malloc(stat.st_size + 1);
         if (!s) {
             error_abort(tu, "unable to allocate memory %s (%s)", argv[1], strerror(errno));
@@ -42,7 +43,7 @@ int main(int argc, char **argv) {
         s[stat.st_size] = 0;
         err = read(file, s, stat.st_size);
         if (err < 0) {
-            error_abort(tu, "unable to stat file %s (%s)", argv[1], strerror(errno));
+            error_abort(tu, "unable to read file %s (%s)", argv[1], strerror(errno));
         }
         tu->source = s;
         tu->source_len = stat.st_size;
