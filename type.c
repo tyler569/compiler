@@ -429,8 +429,8 @@ int type_recur(struct tu *tu, struct node *node, int block_depth, int parent_sco
         }
         fprintf(stderr, "resolving %.*s (line %i) to ", node->token->len, TOKEN_STR(node->token), node->token->line);
         print_type(tu, SCOPE(scope_id)->c_type);
-        fprintf(stderr, " declared on line %i\n", SCOPE(scope_id)->token->line);
-        fprintf(stderr, "block depth is %i\n", block_depth);
+        fprintf(stderr, " declared on line %i ", SCOPE(scope_id)->token->line);
+        fprintf(stderr, "(depth %i)\n", block_depth);
         node->ident.scope_id = scope_id;
         return 0;
     }
@@ -458,12 +458,33 @@ int type_recur(struct tu *tu, struct node *node, int block_depth, int parent_sco
         type_recur(tu, node->for_.block, block_depth + 1, scope);
         return 0;
     }
+    case NODE_SWITCH: {
+        type_recur(tu, node->switch_.expr, block_depth, scope);
+        type_recur(tu, node->switch_.block, block_depth + 1, scope);
+        return 0;
+    }
+    case NODE_CASE: {
+        type_recur(tu, node->case_.value, block_depth, scope);
+        return 0;
+    }
+    case NODE_FUNCTION_CALL: {
+        type_recur(tu, node->funcall.inner, block_depth, scope);
+        for_each (&node->funcall.args) {
+            type_recur(tu, *it, block_depth, scope);
+        }
+    }
     case NODE_BREAK:
     case NODE_CONTINUE:
     case NODE_NULL:
+    case NODE_INT_LITERAL:
+    case NODE_FLOAT_LITERAL:
+    case NODE_STRING_LITERAL:
+    case NODE_GOTO:
+    case NODE_DEFAULT:
+    case NODE_LABEL:
         break;
     default:
         fprintf(stderr, "typer: unrecognised ast node %s\n", node_type_strings[node->type]);
-        return 0;
     }
+    return 0;
 }
