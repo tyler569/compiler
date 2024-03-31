@@ -171,21 +171,58 @@ const char *node_type_strings[NODE_TYPE_COUNT] = {
     [NODE_UNION] = "NODE_UNION",
 };
 
+#define TOKEN_STR(token) (&(tu)->source[(token)->index])
+#define PRINT_TOKEN(token) fprintf(stderr, "%.*s", (token)->len, TOKEN_STR(token))
+
+static void print_dcl_flat(struct tu *tu, struct node *node) {
+    if (node->type != NODE_DECLARATOR) {
+        print_internal_error(tu, "attempting to print non-d with print_dcl_flat");
+        return;
+    }
+
+    if (node->d.inner) {
+        print_dcl_flat(tu, node->d.inner);
+        fprintf(stderr, " -> ");
+    }
+
+    if (node->d.name) {
+        PRINT_TOKEN(node->d.name);
+    } else if (node->d.nameless) {
+        fprintf(stderr, "(nameless)");
+    }
+}
+
+static void print_dcl_list(struct tu *tu, node_list_t *nodes) {
+    fprintf(stderr, "print_dcl_list: ");
+    for_each (nodes) {
+        struct node *d = list_first(&(*it)->decl.declarators);
+        if (d) {
+            print_dcl_flat(tu, d);
+        }
+        fprintf(stderr, " ");
+        print_type(tu, (*it)->decl.decl_spec_c_type);
+
+        if (!list_islast(nodes, *it)) {
+            fprintf(stderr, ", ");
+        }
+    }
+}
+
 #define RECUR(node) print_ast_recursive(nullptr, tu, (node), level + 1)
 #define RECUR_INFO(info, node) print_ast_recursive((info), tu, (node), level + 1)
 static void print_ast_recursive(const char *info, struct tu *tu, struct node *node, int level) {
     print_space(level);
     if (info) fprintf(stderr, "%s ", info);
     if (!node) {
-        fprintf(stderr, "(node *)nullptr\n");
+        print_internal_error(tu, "ast node is nullptr");
         return;
     }
     if (level > 50) {
-        fprintf(stderr, ">50 levels, loop?\n");
+        print_internal_error(tu, "ast more than 50 levels deep, loop?");
         exit(1);
     }
     if (node == tu->ast_root && level > 0) {
-        fprintf(stderr, "root, loop!\n");
+        print_internal_error(tu, "found root node in non-root position");
         exit(1);
     }
 
@@ -284,7 +321,9 @@ static void print_ast_recursive(const char *info, struct tu *tu, struct node *no
             if (n->type == NODE_DECLARATOR) {
                 fprintf(stderr, "%.*s", token->len, &source[token->index]);
             } else if (n->type == NODE_FUNCTION_DECLARATOR) {
-                fprintf(stderr, "()");
+                fprintf(stderr, "(");
+                print_dcl_list(tu, &n->d.fun.args);
+                fprintf(stderr, ")");
             } else if (n->type == NODE_ARRAY_DECLARATOR) {
                 fprintf(stderr, "[]");
             }
@@ -774,6 +813,16 @@ static struct node *parse_direct_declarator(struct context *context) {
         eat(context, ')');
         break;
     }
+    case ',':
+    case ';':
+    case ')': {
+        print_info_token(context->tu, TOKEN(context), "interpreting this as a nameless declarator");
+        struct node *inner = new(context, NODE_DECLARATOR);
+        inner->d.name = nullptr;
+        inner->d.nameless = true;
+        node = inner;
+        break;
+    }
     default:
         return report_error_node(context, "unable to parse d");
     }
@@ -1059,7 +1108,6 @@ static struct node *parse_declaration(struct context *context) {
     eat(context, ';');
 
     return node;
-
 }
 
 // a "single declaration" contains 0 or 1 declarators and doesn't necessarily end with a ;
@@ -1073,7 +1121,7 @@ static struct node *parse_single_declaration(struct context *context) {
     list_init_one(&node->decl.declarators);
 
     if (TOKEN(context)->type == '*' || TOKEN(context)->type == '(' || TOKEN(context)->type == TOKEN_IDENT)
-        node->decl.declarators.data[0] = parse_full_declarator(context);
+        node->decl.declarators.data[0] = parse_declarator(context);
 
     return node;
 }

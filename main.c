@@ -50,7 +50,7 @@ int main(int argc, char **argv) {
     }
 
     tokenize(tu);
-    // print_tokens(tu);
+    print_tokens(tu);
 
     parse(tu);
     print_ast(tu);

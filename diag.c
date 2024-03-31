@@ -82,6 +82,19 @@ void print_error(struct tu *tu, const char *format, ...) {
     handle_error(tu);
 }
 
+void print_internal_error(struct tu *tu, const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+
+    fprintf(stderr, RED "internal error" RESET ": ");
+    vfprintf(stderr, format, args);
+    fprintf(stderr, "\n");
+
+    va_end(args);
+
+    handle_error(tu);
+}
+
 void print_error_node(struct tu *tu, struct node *node, const char *format, ...) {
     va_list args;
     va_start(args, format);
@@ -106,8 +119,6 @@ void print_info_node(struct tu *tu, struct node *node, const char *format, ...) 
     print_and_highlight_extent(tu, node_begin(node), node_end(node));
 
     va_end(args);
-
-    handle_error(tu);
 }
 
 void print_error_token(struct tu *tu, struct token *token, const char *format, ...) {
@@ -122,6 +133,18 @@ void print_error_token(struct tu *tu, struct token *token, const char *format, .
     va_end(args);
 
     handle_error(tu);
+}
+
+void print_info_token(struct tu *tu, struct token *token, const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+
+    fprintf(stderr, BLUE "info" RESET ": ");
+    vfprintf(stderr, format, args);
+    fprintf(stderr, "\n");
+    print_and_highlight(tu->source, token);
+
+    va_end(args);
 }
 
 void vprint_error(struct tu *tu, const char *format, va_list args) {

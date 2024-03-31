@@ -6,4 +6,4 @@
 
 #define ROUND_UP(n, p)
 
-#endif //COMPILER_UTIL_H
+#endif // COMPILER_UTIL_H

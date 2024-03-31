@@ -95,6 +95,7 @@ struct node {
             struct node *initializer;
             bool full;
             struct token *name;
+            bool nameless;
             int scope_id;
             union {
                 struct {
