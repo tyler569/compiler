@@ -313,6 +313,10 @@ int create_scope(struct tu *tu, int parent, int c_type, int depth, enum storage_
     struct scope *scope = new_scope(tu);
     struct scope *parent_scope = SCOPE(parent);
 
+    if (parent_scope->is_global && depth == 0) {
+        scope->is_global = true;
+    }
+
     assert(d->d.name);
 
     scope->token = d->d.name;
@@ -362,6 +366,10 @@ int type_recur(struct tu *tu, struct node *node, int block_depth, int parent_sco
             if ((before = name_exists(tu, d->d.name, scope, block_depth))) {
                 report_error_node(tu, d, "redefinition of name");
                 print_info_node(tu, before->decl, "previous definition is here");
+            }
+            struct scope *parent = SCOPE(parent_scope);
+            if (parent->is_global && node->decl.sc == ST_AUTOMATIC) {
+                node->decl.sc = ST_STATIC;
             }
             int type_id = find_or_create_decl_type(tu, node, d);
             scope = create_scope(tu, scope, type_id, block_depth, node->decl.sc, d, nullptr);

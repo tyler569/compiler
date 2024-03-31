@@ -321,9 +321,7 @@ static void print_ast_recursive(const char *info, struct tu *tu, struct node *no
             if (n->type == NODE_DECLARATOR) {
                 fprintf(stderr, "%.*s", token->len, &source[token->index]);
             } else if (n->type == NODE_FUNCTION_DECLARATOR) {
-                fprintf(stderr, "(");
-                print_dcl_list(tu, &n->d.fun.args);
-                fprintf(stderr, ")");
+                fprintf(stderr, "()");
             } else if (n->type == NODE_ARRAY_DECLARATOR) {
                 fprintf(stderr, "[]");
             }

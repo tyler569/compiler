@@ -93,6 +93,7 @@ struct scope {
     struct node *decl;
     enum storage_class sc;
     bool ns_tag;
+    bool is_global;
     int c_type;
     int parent;
     int block_depth;

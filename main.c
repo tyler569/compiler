@@ -19,7 +19,7 @@ int main(int argc, char **argv) {
     };
 
     list_push(&tu->types, (struct type){});
-    list_push(&tu->scopes, (struct scope){});
+    list_push(&tu->scopes, (struct scope){.is_global = true});
 
     if (argc < 2) {
         tu->source = "int main() { const int x = 10; register short int y = 11; x + y; }";
@@ -50,7 +50,7 @@ int main(int argc, char **argv) {
     }
 
     tokenize(tu);
-    print_tokens(tu);
+    // print_tokens(tu);
 
     parse(tu);
     print_ast(tu);
