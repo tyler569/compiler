@@ -852,42 +852,55 @@ static struct node *parse_static_assert_declaration(struct context *context) {
     return node;
 }
 
+enum parse_state {
+    SEEN_TOKEN_CHAR = (1 << 0),
+    SEEN_TOKEN_SHORT = (1 << 1),
+    SEEN_TOKEN_LONG = (1 << 2),
+    SEEN_TOKEN_LONG_TWICE = (1 << 3),
+    SEEN_TOKEN_INT = (1 << 4),
+    SEEN_TOKEN_SIGNED = (1 << 5),
+    SEEN_TOKEN_UNSIGNED = (6 << 6),
+    SEEN_TOKEN_FLOAT = (1 << 7),
+    SEEN_TOKEN_DOUBLE = (1 << 8),
+    SEEN_TOKEN_COMPLEX = (1 << 9),
+
+    SEEN_FLOAT = SEEN_TOKEN_FLOAT | SEEN_TOKEN_DOUBLE | SEEN_TOKEN_COMPLEX,
+};
+
+static bool incompatible_type_token(enum parse_state state, struct token *token) {
+    switch (token->type) {
+        case TOKEN_CHAR:
+            return (state & (SEEN_TOKEN_CHAR | SEEN_TOKEN_SHORT | SEEN_TOKEN_LONG | SEEN_FLOAT)) != 0;
+        case TOKEN_SHORT:
+            return (state & (SEEN_TOKEN_CHAR | SEEN_TOKEN_LONG | SEEN_FLOAT)) != 0;
+        case TOKEN_LONG:
+            return (state & (SEEN_TOKEN_CHAR | SEEN_TOKEN_LONG_TWICE | SEEN_TOKEN_FLOAT)) != 0;
+        case TOKEN_INT:
+            return (state & (SEEN_TOKEN_CHAR | SEEN_TOKEN_INT | SEEN_FLOAT)) != 0;
+        case TOKEN_SIGNED:
+            return (state & (SEEN_TOKEN_UNSIGNED | SEEN_FLOAT)) != 0;
+        case TOKEN_UNSIGNED:
+            return (state & (SEEN_TOKEN_SIGNED | SEEN_FLOAT)) != 0;
+        case TOKEN_FLOAT:
+            return (state & (SEEN_TOKEN_CHAR | SEEN_TOKEN_SHORT | SEEN_TOKEN_LONG | SEEN_TOKEN_INT |
+                SEEN_TOKEN_SIGNED | SEEN_TOKEN_UNSIGNED)) != 0;
+        case TOKEN_DOUBLE:
+            return (state & (SEEN_TOKEN_CHAR | SEEN_TOKEN_SHORT | SEEN_TOKEN_INT | SEEN_TOKEN_SIGNED |
+            SEEN_TOKEN_UNSIGNED)) != 0;
+        default:
+            return false;
+    }
+}
+
 static struct node *parse_declaration_specifier_list(struct context *context, struct node *node) {
     enum layer_type base_type = 0;
     enum type_flags type_flags = 0;
     enum storage_class sc = 0;
 
-    enum parse_state {
-        SEEN_TOKEN_CHAR = (1 << 0),
-        SEEN_TOKEN_SHORT = (1 << 1),
-        SEEN_TOKEN_LONG = (1 << 2),
-        SEEN_TOKEN_LONG_TWICE = (1 << 3),
-        SEEN_TOKEN_INT = (1 << 4),
-        SEEN_TOKEN_SIGNED = (1 << 5),
-        SEEN_TOKEN_UNSIGNED = (6 << 6),
-        SEEN_TOKEN_FLOAT = (1 << 7),
-        SEEN_TOKEN_DOUBLE = (1 << 8),
-        SEEN_TOKEN_COMPLEX = (1 << 9),
-
-        SEEN_FLOAT = SEEN_TOKEN_FLOAT | SEEN_TOKEN_DOUBLE | SEEN_TOKEN_COMPLEX,
-    };
     enum parse_state state = 0;
 
-    // todo: this needs to be as large as the list of tokens
-    static const enum parse_state incompatible[256] = {
-        [TOKEN_CHAR] = SEEN_TOKEN_CHAR | SEEN_TOKEN_SHORT | SEEN_TOKEN_LONG | SEEN_FLOAT,
-        [TOKEN_SHORT] = SEEN_TOKEN_CHAR | SEEN_TOKEN_LONG | SEEN_FLOAT,
-        [TOKEN_LONG] = SEEN_TOKEN_CHAR | SEEN_TOKEN_LONG_TWICE | SEEN_TOKEN_FLOAT,
-        [TOKEN_INT] = SEEN_TOKEN_CHAR | SEEN_TOKEN_INT | SEEN_FLOAT,
-        [TOKEN_SIGNED] = SEEN_TOKEN_UNSIGNED | SEEN_FLOAT,
-        [TOKEN_UNSIGNED] = SEEN_TOKEN_SIGNED | SEEN_FLOAT,
-        [TOKEN_FLOAT] = SEEN_TOKEN_CHAR | SEEN_TOKEN_SHORT | SEEN_TOKEN_LONG | SEEN_TOKEN_INT | SEEN_TOKEN_SIGNED |
-                        SEEN_TOKEN_UNSIGNED,
-        [TOKEN_DOUBLE] = SEEN_TOKEN_CHAR | SEEN_TOKEN_SHORT | SEEN_TOKEN_INT | SEEN_TOKEN_SIGNED | SEEN_TOKEN_UNSIGNED,
-    };
-
     while (is_declaration_specifier(context, TOKEN(context))) {
-        if (incompatible[TOKEN(context)->type] & state) {
+        if (incompatible_type_token(state, TOKEN(context))) {
             return report_error_node(context, "invalid combination of declaration specifiers");
         }
 
@@ -972,14 +985,13 @@ static struct node *parse_declaration_specifier_list(struct context *context, st
         case TOKEN_INT:
             state |= SEEN_TOKEN_INT;
             if (base_type == TYPE_SIGNED_SHORT) {}
-            else if (base_type == TYPE_SIGNED_INT) goto error;
+            else if (base_type == TYPE_SIGNED_INT) {}
             else if (base_type == TYPE_SIGNED_LONG) {}
             else if (base_type == TYPE_SIGNED_LONG_LONG) {}
             else if (base_type == TYPE_UNSIGNED_SHORT) {}
-            else if (base_type == TYPE_UNSIGNED_INT) goto error;
+            else if (base_type == TYPE_UNSIGNED_INT) {}
             else if (base_type == TYPE_UNSIGNED_LONG) {}
             else if (base_type == TYPE_UNSIGNED_LONG_LONG) {}
-            else if (base_type == TYPE_UNSIGNED_INT) {}
             else if (base_type == 0) base_type = TYPE_SIGNED_INT;
             else goto error;
             break;
