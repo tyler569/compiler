@@ -379,13 +379,13 @@ int type_recur(struct tu *tu, struct node *node, int block_depth, int parent_sco
             int s = type_recur(tu, *it, block_depth, scope);
             if (s) scope = s;
         }
-        return 0;
+        break;
     case NODE_BLOCK:
         for_each (&node->block.children) {
             int s = type_recur(tu, *it, block_depth + 1, scope);
             if (s) scope = s;
         }
-        return 0;
+        break;
     case NODE_FUNCTION_DEFINITION: {
         int new_outer = type_recur(tu, node->fun.decl, block_depth, scope);
         struct node *n = node->fun.decl;
@@ -404,23 +404,23 @@ int type_recur(struct tu *tu, struct node *node, int block_depth, int parent_sco
     case NODE_BINARY_OP:
         type_recur(tu, node->binop.lhs, block_depth, scope);
         type_recur(tu, node->binop.rhs, block_depth, scope);
-        return 0;
+        break;
     case NODE_UNARY_OP:
     case NODE_POSTFIX_OP:
         type_recur(tu, node->unary_op.inner, block_depth, scope);
-        return 0;
+        break;
     case NODE_SUBSCRIPT:
         type_recur(tu, node->subscript.inner, block_depth, scope);
         type_recur(tu, node->subscript.subscript, block_depth, scope);
-        return 0;
+        break;
     case NODE_TERNARY:
         type_recur(tu, node->ternary.condition, block_depth, scope);
         type_recur(tu, node->ternary.branch_true, block_depth, scope);
         type_recur(tu, node->ternary.branch_false, block_depth, scope);
-        return 0;
+        break;
     case NODE_RETURN:
         type_recur(tu, node->ret.expr, block_depth, scope);
-        return 0;
+        break;
     case NODE_IDENT: {
         int scope_id = resolve_name(tu, node->token, scope);
         if (!scope_id) {
@@ -432,40 +432,40 @@ int type_recur(struct tu *tu, struct node *node, int block_depth, int parent_sco
         fprintf(stderr, " declared on line %i ", SCOPE(scope_id)->token->line);
         fprintf(stderr, "(depth %i)\n", block_depth);
         node->ident.scope_id = scope_id;
-        return 0;
+        break;
     }
     case NODE_IF: {
         type_recur(tu, node->if_.cond, block_depth, scope);
         type_recur(tu, node->if_.block_true, block_depth + 1, scope);
         if (node->if_.block_false)
             type_recur(tu, node->if_.block_false, block_depth + 1, scope);
-        return 0;
+        break;
     }
     case NODE_WHILE: {
         type_recur(tu, node->while_.cond, block_depth, scope);
         type_recur(tu, node->while_.block, block_depth + 1, scope);
-        return 0;
+        break;
     }
     case NODE_DO: {
         type_recur(tu, node->do_.cond, block_depth, scope);
         type_recur(tu, node->do_.block, block_depth + 1, scope);
-        return 0;
+        break;
     }
     case NODE_FOR: {
-        type_recur(tu, node->for_.init, block_depth, scope);
-        type_recur(tu, node->for_.cond, block_depth, scope);
-        type_recur(tu, node->for_.next, block_depth, scope);
-        type_recur(tu, node->for_.block, block_depth + 1, scope);
-        return 0;
+        int for_scope = type_recur(tu, node->for_.init, block_depth + 1, scope);
+        type_recur(tu, node->for_.cond, block_depth + 1, for_scope);
+        type_recur(tu, node->for_.next, block_depth + 1, for_scope);
+        type_recur(tu, node->for_.block, block_depth + 1, for_scope);
+        break;
     }
     case NODE_SWITCH: {
         type_recur(tu, node->switch_.expr, block_depth, scope);
         type_recur(tu, node->switch_.block, block_depth + 1, scope);
-        return 0;
+        break;
     }
     case NODE_CASE: {
         type_recur(tu, node->case_.value, block_depth, scope);
-        return 0;
+        break;
     }
     case NODE_FUNCTION_CALL: {
         type_recur(tu, node->funcall.inner, block_depth, scope);
@@ -486,5 +486,5 @@ int type_recur(struct tu *tu, struct node *node, int block_depth, int parent_sco
     default:
         fprintf(stderr, "typer: unrecognised ast node %s\n", node_type_strings[node->type]);
     }
-    return 0;
+    return scope;
 }
