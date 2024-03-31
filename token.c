@@ -43,6 +43,7 @@ static void eat(struct state *, char c);
 static void pass(struct state *);
 static bool pull(struct state *, char c);
 
+static void read_comment(struct state *);
 static void read_ident(struct state *);
 static void read_number(struct state *);
 static void read_string(struct state *);
@@ -69,6 +70,8 @@ int tokenize(struct tu *tu) {
             read_string(state);
         } else if (c == '\'') {
             read_char(state);
+        } else if (c == '/' && (PEEK(state) == '/' || PEEK(state) == '*')) {
+            read_comment(state);
         } else {
             read_symbol(state);
         }
@@ -232,6 +235,37 @@ static_assert(ARRAY_LEN(keywords) == TOKEN_LAST_KEYWORD - TOKEN_FIRST_KEYWORD);
 
 // could populate the lengths here on startup if we need to
 size_t keyword_lens[ARRAY_LEN(keywords)];
+
+static void read_comment(struct state *state) {
+    struct token *token = new(state, TOKEN_COMMENT);
+    const char *first = &CHAR(state);
+
+    if (*first != '/') {
+        report_error(state, "expected comment to start with '/'");
+    }
+    if (PEEK(state) == '*') {
+        pass(state);
+        pass(state);
+        while (CHAR(state) != '*' && PEEK(state) != '/') {
+            pass(state);
+        }
+        if (CHAR(state) != '*') {
+            report_error(state, "expected comment to end with '*/'");
+        }
+        pass(state);
+        pass(state);
+    } else if (PEEK(state) == '/') {
+        pass(state);
+        pass(state);
+        while (CHAR(state) != '\n') {
+            pass(state);
+        }
+    } else {
+        report_error(state, "expected comment to start with '/*' or '//'");
+    }
+
+    end(state, token);
+}
 
 static void read_ident(struct state *state) {
     struct token *token = new(state, TOKEN_IDENT);

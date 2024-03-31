@@ -54,6 +54,7 @@ typedef list(struct node *) node_list_t;
 struct node {
     struct token *token;
     struct token *token_end;
+    struct token *attached_comment;
     enum node_type type;
     int c_type;
     union {

@@ -1129,6 +1129,10 @@ static struct node *parse_single_declaration(struct context *context) {
 static struct node *parse_expression_statement(struct context *context) {
     struct node *expr = parse_expression(context);
     eat(context, ';');
+    if (TOKEN(context)->type == TOKEN_COMMENT) {
+        expr->attached_comment = TOKEN(context);
+        pass(context);
+    }
     return expr;
 }
 
